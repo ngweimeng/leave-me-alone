@@ -1,0 +1,11 @@
+streamlit
+holidays
+xpress
+pydantic
+python-dateutil
+pytest
+pandas
+calplot
+matplotlib
+pandas
+pycountry
