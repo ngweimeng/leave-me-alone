@@ -38,18 +38,26 @@ PRESETS = {
     "Recommended (Balanced Mix)": {
         "weight": 1.5,
         "desc": "A smart blend of short breaks and longer vacations.",
+        "min_stretch": None,
+        "max_stretch": None,
     },
     "Long Weekends (3-4 days)": {
         "weight": 2.0,
-        "desc": "Multiple 3-4 day weekends throughout the year.",
+        "desc": "Multiple 3–4 day weekends throughout the year.",
+        "min_stretch": 3,
+        "max_stretch": 4,
     },
     "Week-Long Breaks (entire week)": {
         "weight": 4.0,
-        "desc": "Full week-long breaks (7-9 days) for substantial time off.",
+        "desc": "Full week-long vacations (7–9 days).",
+        "min_stretch": 7,
+        "max_stretch": None,
     },
     "Extended Vacations (>2 weeks)": {
         "weight": 8.0,
-        "desc": "2 weeks or more vacations (>14 days) for deeper relaxation.",
+        "desc": "Two weeks or more of continuous vacation.",
+        "min_stretch": 14,
+        "max_stretch": None,
     },
 }
 
@@ -190,16 +198,15 @@ def render_public_holidays(user_input) -> List[date]:
 
 
 def render_style_preset(user_input) -> None:
-    """Step 4: Choose vacation style preset."""
     st.subheader("Step 4 — Select Vacation Style")
-    st.markdown(
-        "Choose a vacation preference to guide how PTO days are distributed throughout the timeframe."
-    )
+    st.markdown("Choose a vacation preference to guide how PTO days are distributed.")
 
     style = st.radio("Vacation Style", list(PRESETS.keys()), index=0)
     st.caption(PRESETS[style]["desc"])
 
     user_input.adjacency_weight = PRESETS[style]["weight"]
+    user_input.min_stretch = PRESETS[style]["min_stretch"]
+    user_input.max_stretch = PRESETS[style]["max_stretch"]
 
     st.markdown("---")
 
@@ -362,6 +369,8 @@ def render_optimize_button(user_input, selected_ph_dates: List[date]) -> None:
             leave_available=remaining,
             adjacency_weight=user_input.adjacency_weight,
             prebooked_days=user_input.prebooked_days,
+            min_stretch=user_input.min_stretch,
+            max_stretch=user_input.max_stretch,
         )
 
         st.success("✅ Optimization Completed!")

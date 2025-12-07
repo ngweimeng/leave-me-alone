@@ -17,7 +17,7 @@ def classify_break(days: int) -> str:
 
 
 def _coerce_to_dates(values: Iterable[Any]) -> List[date]:
-    """Best-effort conversion of an iterable of values into a list[date]."""
+    """Convert iterable values into a clean list[date]."""
     out: List[date] = []
     for v in values or []:
         if isinstance(v, date) and not isinstance(v, datetime):
@@ -33,7 +33,7 @@ def _coerce_to_dates(values: Iterable[Any]) -> List[date]:
 
 
 # ----------------------------------------------------
-# Render Cards (3 columns)
+# Render Break Cards (3 columns)
 # ----------------------------------------------------
 def render_break_cards(
     break_periods: List[Dict[str, Any]],
@@ -100,7 +100,7 @@ def render_break_cards(
         total = p["Days"]
         pto = p["PTO Used"]
 
-        # Count public holidays that fall inside this break
+        # Count public holidays inside this break
         holiday_count = sum(1 for d in public_holidays if p["Start"] <= d <= p["End"])
 
         badge = classify_break(total)
@@ -127,20 +127,18 @@ def render_break_cards(
 # Main Results Rendering
 # ----------------------------------------------------
 def show_results(result: Dict[str, Any]):
-    # Core sets
-    break_days: List[date] = sorted(_coerce_to_dates(result["break_days"]))
-    leave_days: List[date] = _coerce_to_dates(result["leave_days"])
-
-    # Try to read holidays from the result; fall back to empty list
+    # Convert incoming values to real date objects
+    break_days: List[date] = sorted(_coerce_to_dates(result.get("break_days", [])))
+    leave_days: List[date] = _coerce_to_dates(result.get("leave_days", []))
     public_holidays: List[date] = _coerce_to_dates(result.get("public_holidays", []))
 
     break_periods: List[Dict[str, Any]] = []
 
-    # Group into continuous stretches
+    # Build continuous break periods
     if break_days:
         start = break_days[0]
         end = break_days[0]
-        pto_count = 1 if break_days[0] in leave_days else 0
+        pto_count = 1 if start in leave_days else 0
 
         for d in break_days[1:]:
             if d == end + timedelta(days=1):
@@ -171,34 +169,41 @@ def show_results(result: Dict[str, Any]):
     # Remove pure Sat–Sun weekend-only breaks
     filtered: List[Dict[str, Any]] = []
     for p in break_periods:
-        if (
-            p["Days"] == 2
-            and p["Start"].weekday() == 5  # Saturday
-            and p["End"].weekday() == 6  # Sunday
-        ):
+        if p["Days"] == 2 and p["Start"].weekday() == 5 and p["End"].weekday() == 6:
             continue
         filtered.append(p)
 
+    # -------------------------------
+    # Summary + Cards + Calendar
+    # -------------------------------
     if filtered:
-        # Calculate total break days excluding weekend-only breaks
         total_break_days = sum(p["Days"] for p in filtered)
 
-        # 1. Summary first
+        # Summary
         st.subheader("📊 Summary")
         col1, col2, col3 = st.columns(3)
         col1.metric("Total Break Days", total_break_days)
         col2.metric("PTO Used", len(leave_days))
         col3.metric("Break Periods", len(filtered))
 
-        # 2. Your Optimized Breaks
+        # Cards
         render_break_cards(filtered, public_holidays=public_holidays)
 
-        # 3. Calendar View
+        # Calendar View
+        # Pick year (from first break day or current year)
+        if break_days:
+            year = break_days[0].year
+        else:
+            year = date.today().year
+
         try:
             render_calendar_heatmap(
-                result["break_days"], result["leave_days"], result.get("year")
+                break_days,
+                leave_days,
+                year,
+                holiday_map={d: d.strftime("%b %d") for d in public_holidays},
             )
-        except Exception:
-            st.info("Break calendar unavailable.")
+        except Exception as e:
+            st.error(f"Calendar rendering failed: {e}")
     else:
         st.info("No break periods found.")
