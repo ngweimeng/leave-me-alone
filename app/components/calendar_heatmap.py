@@ -31,7 +31,10 @@ def render_calendar_heatmap(break_days, leave_days, year):
 
     # Compute public holidays as break_days that are not weekends and not leave
     # (This infers PH from break_days; if you have an explicit PH list pass it instead.)
-    year_dates = set(_dt.date(year, 1, 1) + _dt.timedelta(days=i) for i in range(( _dt.date(year,12,31) - _dt.date(year,1,1) ).days + 1))
+    year_dates = set(
+        _dt.date(year, 1, 1) + _dt.timedelta(days=i)
+        for i in range((_dt.date(year, 12, 31) - _dt.date(year, 1, 1)).days + 1)
+    )
     weekends = set(d for d in year_dates if d.weekday() >= 5)
     ph_set = bd_set - weekends - ld_set
 
@@ -50,12 +53,12 @@ def render_calendar_heatmap(break_days, leave_days, year):
         nrows = len(month_cal)
         # allow a small top margin for weekday headers
         ax.set_ylim(-nrows, 1)
-        ax.axis('off')
-        ax.set_aspect('equal')
+        ax.axis("off")
+        ax.set_aspect("equal")
 
         # Draw weekday headers above the grid
-        for i, wd in enumerate(['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']):
-            ax.text(i + 0.5, 0.6, wd, fontsize=7, ha='center', va='center')
+        for i, wd in enumerate(["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]):
+            ax.text(i + 0.5, 0.6, wd, fontsize=7, ha="center", va="center")
 
         # Draw cells (week rows top-to-bottom)
         for week_idx, week in enumerate(month_cal):
@@ -66,32 +69,42 @@ def render_calendar_heatmap(break_days, leave_days, year):
 
                 # Determine background color
                 if d in ld_set:
-                    face = '#ff6b6b'  # red for leave
-                    text_color = 'white'
+                    face = "#ff6b6b"  # red for leave
+                    text_color = "white"
                 elif d in ph_set:
-                    face = '#ffd54f'  # yellow for public holiday
-                    text_color = 'black'
+                    face = "#ffd54f"  # yellow for public holiday
+                    text_color = "black"
                 elif d.weekday() >= 5:
-                    face = '#efefef'  # light gray for weekend
-                    text_color = 'black'
+                    face = "#efefef"  # light gray for weekend
+                    text_color = "black"
                 else:
-                    face = 'white'
-                    text_color = 'black'
+                    face = "white"
+                    text_color = "black"
 
                 # Rectangle bottom-left at (dow, -week_idx-1), height=1
-                rect = mpatches.Rectangle((dow, -week_idx - 1), 1, 1, edgecolor='lightgray', facecolor=face)
+                rect = mpatches.Rectangle(
+                    (dow, -week_idx - 1), 1, 1, edgecolor="lightgray", facecolor=face
+                )
                 ax.add_patch(rect)
 
                 # Day number centered in cell
-                ax.text(dow + 0.5, -week_idx - 0.5, str(day), fontsize=8, ha='center', va='center', color=text_color)
+                ax.text(
+                    dow + 0.5,
+                    -week_idx - 0.5,
+                    str(day),
+                    fontsize=8,
+                    ha="center",
+                    va="center",
+                    color=text_color,
+                )
 
     # Legend
     legend_patches = [
-        mpatches.Patch(color='#ff6b6b', label='Leave Days'),
-        mpatches.Patch(color='#ffd54f', label='Public Holidays'),
-        mpatches.Patch(color='#efefef', label='Weekends'),
+        mpatches.Patch(color="#ff6b6b", label="Leave Days"),
+        mpatches.Patch(color="#ffd54f", label="Public Holidays"),
+        mpatches.Patch(color="#efefef", label="Weekends"),
     ]
-    fig.legend(handles=legend_patches, loc='lower center', ncol=3)
+    fig.legend(handles=legend_patches, loc="lower center", ncol=3)
 
     fig.tight_layout(rect=[0, 0.03, 1, 0.95])
     st.pyplot(fig)
@@ -106,6 +119,7 @@ def _as_date(d):
     # assume pandas Timestamp or string
     try:
         import pandas as pd
+
         return pd.to_datetime(d).date()
     except Exception:
         return d

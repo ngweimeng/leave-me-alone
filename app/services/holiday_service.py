@@ -1,5 +1,6 @@
 import holidays
 
+
 def get_all_supported_countries():
     """Return country codes supported by the holidays library."""
     return sorted(list(holidays.list_supported_countries().keys()))
@@ -28,7 +29,7 @@ def get_supported_country_map():
                 else:
                     country = pycountry.countries.get(alpha_3=code.upper())
                 if country is not None:
-                    name = getattr(country, 'name', None)
+                    name = getattr(country, "name", None)
             except Exception:
                 name = None
 
@@ -37,6 +38,7 @@ def get_supported_country_map():
     except Exception:
         # pycountry not available — return codes as-is
         return {c: c for c in sorted(codes_map.keys())}
+
 
 def load_public_holidays(country: str, year: int):
     ph = holidays.country_holidays(country, years=year)

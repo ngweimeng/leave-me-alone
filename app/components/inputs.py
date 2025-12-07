@@ -5,7 +5,12 @@ import pandas as pd
 from app.models.leave_request import LeaveOptimizationRequest
 
 
-def render_inputs(leave_available: Optional[int] = None, start: Optional[date] = None, end: Optional[date] = None, **kwargs) -> LeaveOptimizationRequest:
+def render_inputs(
+    leave_available: Optional[int] = None,
+    start: Optional[date] = None,
+    end: Optional[date] = None,
+    **kwargs,
+) -> LeaveOptimizationRequest:
     """Return a LeaveOptimizationRequest built from provided values or session state.
 
     This function no longer renders the PTO number input. PTO should be
@@ -13,10 +18,10 @@ def render_inputs(leave_available: Optional[int] = None, start: Optional[date] =
     argument (or stored in `st.session_state['leave_available_total']`).
     """
     # Accept start/end provided via kwargs (defensive)
-    if start is None and 'start' in kwargs:
-        start = kwargs.get('start')
-    if end is None and 'end' in kwargs:
-        end = kwargs.get('end')
+    if start is None and "start" in kwargs:
+        start = kwargs.get("start")
+    if end is None and "end" in kwargs:
+        end = kwargs.get("end")
 
     # If timeframe not provided, default to current calendar year
     if start is None or end is None:
@@ -30,7 +35,7 @@ def render_inputs(leave_available: Optional[int] = None, start: Optional[date] =
 
     # If leave_available not provided, try to read from session state
     if leave_available is None:
-        leave_available = int(st.session_state.get('leave_available_total', 0))
+        leave_available = int(st.session_state.get("leave_available_total", 0))
 
     return LeaveOptimizationRequest(
         country="",

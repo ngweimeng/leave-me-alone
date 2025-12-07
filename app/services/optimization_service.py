@@ -2,7 +2,15 @@ from datetime import timedelta
 from app.services.leave_model import solve_leave_lp
 
 
-def run_optimizer(start, end, public_holidays=None, blocked_days=None, leave_available=0, adjacency_weight: float = 1.0, prebooked_days=None):
+def run_optimizer(
+    start,
+    end,
+    public_holidays=None,
+    blocked_days=None,
+    leave_available=0,
+    adjacency_weight: float = 1.0,
+    prebooked_days=None,
+):
     """Run the leave optimizer.
 
     Accepts both the older positional names (`ph`, `blocked`) and the newer,

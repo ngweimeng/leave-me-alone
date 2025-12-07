@@ -32,7 +32,10 @@ class SessionManager:
             st.session_state["prebooked_days"].append(d)
 
     def remove_prebooked(self, d: date) -> None:
-        if "prebooked_days" in st.session_state and d in st.session_state["prebooked_days"]:
+        if (
+            "prebooked_days" in st.session_state
+            and d in st.session_state["prebooked_days"]
+        ):
             st.session_state["prebooked_days"].remove(d)
 
     # Other time off
@@ -46,7 +49,10 @@ class SessionManager:
             st.session_state["other_time_off"].append(entry)
 
     def remove_other_time_off(self, entry: Tuple[date, str]) -> None:
-        if "other_time_off" in st.session_state and entry in st.session_state["other_time_off"]:
+        if (
+            "other_time_off" in st.session_state
+            and entry in st.session_state["other_time_off"]
+        ):
             st.session_state["other_time_off"].remove(entry)
 
     # Selected public holidays placeholder (stores the display strings)
