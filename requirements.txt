@@ -7,5 +7,5 @@ pytest
 pandas
 calplot
 matplotlib
-pandas
 pycountry
+black
