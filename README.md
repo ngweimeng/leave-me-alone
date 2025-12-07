@@ -31,21 +31,49 @@ A Streamlit application that uses FICO Xpress optimization to help you get the m
    cd leave-me-alone
    ```
 
-2. **Install dependencies**
+2. **Create and activate virtual environment**
+   ```bash
+   python -m venv .venv
+   source .venv/bin/activate  # On Windows: .venv\Scripts\activate
+   ```
+
+3. **Install dependencies**
    ```bash
    pip install -r requirements.txt
    ```
 
-3. **Run the application**
+4. **Run the application**
    ```bash
-   make run
+   ./run_app.sh
    # or
    streamlit run app/main.py
    ```
 
-4. **Open in browser**
+5. **Open in browser**
    
    The app will automatically open at `http://localhost:8501`
+
+## Development
+
+### Code Quality Check (Format + Test)
+Run both code formatting and tests in one command:
+```bash
+./check.sh
+```
+This will:
+- Format all code with `black` (auto-installs if needed)
+- Run all tests with `pytest`
+- Show a nice summary of results
+
+### Running Tests Only
+```bash
+python -m pytest -q
+```
+
+### Formatting Code Only
+```bash
+black app
+```
 
 ## Usage
 
