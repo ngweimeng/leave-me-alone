@@ -1,28 +1,36 @@
 """
-Leave optimization model using linear programming.
+Leave Optimization Model (Linear Programming)
 
-This module defines a linear     # 3. Break day logic
-    for d in date_range:
-        is_weekend_or_holiday = (d.weekday() >= 5) or (d in holidays)
+This module defines an optimization model that determines which days a user
+should take leave in order to maximize total break time. Break time includes:
 
-        if is_weekend_or_holiday:
-            # Automatically a break day
-            model.addConstraint(break_vars[d] == 1)
-        else:
-            # Only a break if leave is taken
-            model.addConstraint(break_vars[d] <= leave_vars[d])
+- Weekends
+- Public holidays
+- Leave days chosen by the model
 
-    # 4. Adjacency logic: adj = break[i] AND break[i+1] model that allocates leave days to
-maximize total break time (weekends + holidays + leave) while respecting
-constraints such as:
-- leave budget
-- blocked days
-- pre-booked leave days
-- adjacency bonus for longer continuous breaks
+The model respects several constraints:
+
+1. Leave budget:
+   - The user cannot exceed the number of leave days available.
+
+2. Prebooked leave:
+   - Certain dates may already be locked in as leave days.
+
+3. Break-day logic:
+   - Weekends and public holidays are automatically break days.
+   - Weekdays become break days only if leave is allocated.
+
+4. Adjacency bonus:
+   - Consecutive break days are rewarded using adjacency_weight, encouraging
+     longer continuous vacations.
+
+The core solver `solve_leave_lp()` returns:
+- break_days: all days off (weekends + holidays + allocated leave)
+- leave_days: days where the solver assigns leave
 """
 
 from datetime import date
-from typing import List, Set, Optional, Tuple
+from typing import Optional
 import warnings
 import xpress as xp
 
@@ -31,30 +39,30 @@ warnings.filterwarnings("ignore", category=UserWarning, module="xpress")
 
 
 def solve_leave_lp(
-    date_range: List[date],
-    holidays: Set[date],
+    date_range: list[date],
+    holidays: set[date],
     leave_available: int,
     adjacency_weight: float = 1.0,
-    prebooked_days: Optional[Set[date]] = None,
-) -> Tuple[List[date], List[date]]:
+    prebooked_days: Optional[set[date]] = None,
+) -> tuple[list[date], list[date]]:
     """
     Solve a leave allocation optimization problem.
 
     Args:
-        date_range: Ordered list of dates to consider.
-        holidays: Set of public holidays (always treated as break days).
+        date_range: Ordered list of dates to evaluate.
+        holidays: Set of public holidays (treated automatically as break days).
         leave_available: Maximum number of leave days available.
-        adjacency_weight: Weight applied to consecutive break-day bonuses.
-        prebooked_days: Optional set of dates already confirmed as leave.
+        adjacency_weight: Bonus weight for consecutive break days.
+        prebooked_days: Dates already locked in as leave.
 
     Returns:
-        A tuple of:
-            break_days: All break days (weekends, holidays, and allocated leave).
-            leave_days: Dates where the solver allocated leave.
+        (break_days, leave_days):
+            break_days → all break days (weekends + holidays + allocated leave)
+            leave_days → dates where the solver assigns leave
     """
 
     # ------------------------------
-    # Validate inputs
+    # Input Validation
     # ------------------------------
     if not date_range:
         raise ValueError("Date range cannot be empty")
@@ -63,49 +71,80 @@ def solve_leave_lp(
         raise ValueError("Leave available cannot be negative")
 
     # ------------------------------
-    # Create optimization model
+    # Create Optimization Model
     # ------------------------------
     model = xp.problem()
 
-    # Decision Variables
+    # Decision variables:
+    # leave_vars[d] = 1 → take leave on date d
+    # break_vars[d] = 1 → date d is a break day
     leave_vars = {d: xp.var(vartype=xp.binary) for d in date_range}
     break_vars = {d: xp.var(vartype=xp.binary) for d in date_range}
 
-    # Adjacency variable: 1 when day[i] and day[i+1] are both break days
+    # adjacency_vars[d] = 1 → break[d] AND break[d+1]
     adjacency_vars = {
         date_range[i]: xp.var(vartype=xp.binary) for i in range(len(date_range) - 1)
     }
 
-    # Add variables to model
+    # Register variables
     model.addVariable(leave_vars)
     model.addVariable(break_vars)
     model.addVariable(adjacency_vars)
 
-    # ------------------------------
-    # Constraints
-    # ------------------------------
+    # ==============================================================
+    #                           CONSTRAINTS
+    # ==============================================================
 
+    # --------------------------------------------------------------
     # 1. Prebooked leave must be respected
+    #
+    # If the user already booked leave on certain days, the optimizer is
+    # forced to set leave_vars[d] = 1 for those dates.
+    # --------------------------------------------------------------
     if prebooked_days:
         for d in prebooked_days:
             if d in leave_vars:
                 model.addConstraint(leave_vars[d] == 1)
 
-    # 2. Leave budget
+    # --------------------------------------------------------------
+    # 2. Leave budget constraint
+    #
+    # Ensures the solver cannot assign more leave days than the user has.
+    #
+    #     sum(leave_vars[d]) ≤ leave_available
+    # --------------------------------------------------------------
     model.addConstraint(xp.Sum(leave_vars[d] for d in date_range) <= leave_available)
 
+    # --------------------------------------------------------------
     # 3. Break day logic
+    #
+    # Weekends and public holidays are automatically break days.
+    # Weekdays become break days only when leave is taken.
+    #
+    # weekend/holiday → break_vars[d] = 1
+    # weekday         → break_vars[d] ≤ leave_vars[d]
+    # --------------------------------------------------------------
     for d in date_range:
         is_weekend_or_holiday = (d.weekday() >= 5) or (d in holidays)
 
         if is_weekend_or_holiday:
-            # Automatically a break day
             model.addConstraint(break_vars[d] == 1)
         else:
-            # Only a break if leave is taken
             model.addConstraint(break_vars[d] <= leave_vars[d])
 
-    # 5. Adjacency logic: adj = break[i] AND break[i+1]
+    # --------------------------------------------------------------
+    # 4. Adjacency logic
+    #
+    # adjacency_vars[d] = 1 when:
+    #       break[d] = 1 AND break[d+1] = 1
+    #
+    # Linearized AND constraints:
+    #       adj[d] ≤ break[d]
+    #       adj[d] ≤ break[d+1]
+    #       adj[d] ≥ break[d] + break[d+1] - 1
+    #
+    # This rewards continuous vacation stretches.
+    # --------------------------------------------------------------
     for i in range(len(date_range) - 1):
         d1 = date_range[i]
         d2 = date_range[i + 1]
@@ -115,23 +154,23 @@ def solve_leave_lp(
         model.addConstraint(adj <= break_vars[d2])
         model.addConstraint(adj >= break_vars[d1] + break_vars[d2] - 1)
 
-    # ------------------------------
-    # Objective: Maximize total break days + adjacency bonus
-    # ------------------------------
+    # ==============================================================
+    #                            OBJECTIVE
+    # ==============================================================
+    # Maximize:
+    #   total break days
+    # + adjacency bonus for longer continuous vacations
+    # --------------------------------------------------------------
     model.setObjective(
         xp.Sum(break_vars[d] for d in date_range)
         + adjacency_weight * xp.Sum(adjacency_vars[d] for d in adjacency_vars),
         sense=xp.maximize,
     )
 
-    # ------------------------------
-    # Solve
-    # ------------------------------
+    # Solve model
     model.solve()
 
-    # ------------------------------
-    # Extract solution
-    # ------------------------------
+    # Extract final solution
     break_days = [d for d in date_range if model.getSolution(break_vars[d]) > 0.5]
     leave_days = [d for d in date_range if model.getSolution(leave_vars[d]) > 0.5]
 

@@ -164,77 +164,61 @@ For each day $d \in D$ except the last:
 
 #### Objective
 
-Maximize the total number of break days plus an adjacency bonus
-for consecutive break sequences:
+Maximize the total number of break days plus an adjacency bonus for consecutive break sequences:
 
-\[
-\max \quad 
-\sum_{d \in D} b_d 
-\;+\;
-\alpha \sum_{d \in D \setminus \{\text{last day}\}} a_d
-\]
+```
+max: Σ(b_d for d in D) + α·Σ(a_d for d in D\{last day})
+```
+
+Where:
+- `b_d` = 1 if day d is a break day, 0 otherwise
+- `a_d` = 1 if both day d and d+1 are break days (adjacency bonus)
+- `α` = adjacency weight parameter
 
 #### Constraints
 
-1. **Pre-booked leave must be honored**
+**1. Pre-booked leave must be honored**
 
-For all $d \in P$:
-\[
+For all days `d` in pre-booked set `P`:
+```
 l_d = 1
-\]
+```
 
-2. **Leave budget**
+**2. Leave budget**
 
-The total number of leave days cannot exceed the available budget:
-\[
-\sum_{d \in D} l_d \;\le\; L
-\]
+Total leave days cannot exceed available budget `L`:
+```
+Σ(l_d for d in D) ≤ L
+```
 
-3. **Break-day logic**
+**3. Break-day logic**
 
-- Weekends and public holidays are always break days:
-
-For all $d \in H$:
-\[
-b_d = 1
-\]
+- Weekends and public holidays (set `H`) are always break days:
+  ```
+  b_d = 1  for all d in H
+  ```
 
 - Weekdays can only become break days if leave is taken:
+  ```
+  b_d ≤ l_d  for all d in D\H
+  ```
 
-For all $d \in D \setminus H$:
-\[
-b_d \le l_d
-\]
+**4. Adjacency (consecutive break days)**
 
-4. **Adjacency (consecutive break days)**
+For each day `d` with a successor `d+`:
+```
+a_d ≤ b_d
+a_d ≤ b_(d+)
+a_d ≥ b_d + b_(d+) - 1
+```
 
-For each day $d \in D$ that has a successor $d^+$:
-
-\[
-\begin{aligned}
-a_d &\le b_d \\
-a_d &\le b_{d^+} \\
-a_d &\ge b_d + b_{d^+} - 1
-\end{aligned}
-\]
-
-These three constraints linearize the logical condition
-\[
-a_d = b_d \land b_{d^+}
-\]
-so that $a_d = 1$ if and only if both $b_d$ and $b_{d^+}$ are 1.
+These three constraints linearize the logical AND condition: `a_d = b_d AND b_(d+)`, ensuring `a_d = 1` if and only if both `b_d` and `b_(d+)` are 1.
 
 #### Variable Domains
 
-For all $d \in D$:
-\[
-l_d, b_d \in \{0,1\}
-\]
-
-For all $d \in D$ with a successor $d^+$:
-\[
-a_d \in \{0,1\}
-\]
+- **Leave variables** `l_d ∈ {0,1}` for all `d ∈ D`
+- **Break variables** `b_d ∈ {0,1}` for all `d ∈ D`  
+- **Adjacency variables** `a_d ∈ {0,1}` for all `d ∈ D` with successor
 
 ## License
 
