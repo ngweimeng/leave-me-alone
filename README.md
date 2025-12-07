@@ -1,24 +1,22 @@
-# 🌴 Leave Optimizer
+# Leave Optimizer
 
 > Scientifically maximize your vacation time using linear programming, public holidays, and strategic PTO allocation.
 
-An intelligent Streamlit application that uses FICO Xpress optimization to help you get the most continuous time off by strategically placing your paid time off (PTO) days adjacent to weekends and public holidays.
+A Streamlit application that uses FICO Xpress optimization to help you get the most continuous time off by strategically placing your paid time off (PTO) days adjacent to weekends and public holidays.
 
 [![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
 [![Python](https://img.shields.io/badge/python-3.8+-blue.svg)](https://www.python.org/downloads/)
 [![Streamlit](https://img.shields.io/badge/streamlit-1.0+-red.svg)](https://streamlit.io)
 
-## ✨ Features
+## Features
 
 - **Smart Optimization**: Uses linear programming (MILP) to maximize consecutive break days
 - **Vacation Style Presets**: Choose from balanced mix, long weekends, mini breaks, week-long vacations, or extended vacations
 - **Public Holiday Integration**: Automatically fetches public holidays for 100+ countries via the `holidays` library
 - **Pre-booked Days**: Constrain the optimizer around days you've already committed to taking off
 - **Additional Time Off**: Add company-wide holidays, personal days, or other non-PTO time off
-- **Interactive Calendar Heatmap**: Visualize your optimized break schedule with color-coded calendar views
-- **Session State Management**: Persistent UI state throughout your planning session
 
-## 🚀 Quick Start
+## Quick Start
 
 ### Prerequisites
 
@@ -49,7 +47,7 @@ An intelligent Streamlit application that uses FICO Xpress optimization to help 
    
    The app will automatically open at `http://localhost:8501`
 
-## 📖 Usage
+## Usage
 
 ### Step-by-Step Guide
 
@@ -109,7 +107,7 @@ leave-me-alone/
 └── README.md                      # This file
 ```
 
-## 🧪 Development
+## Development
 
 ### Running Tests
 
@@ -137,27 +135,7 @@ The application follows a clean architecture pattern:
 - **Models** (`models/`): Type-safe data structures using Pydantic
 - **State** (`state/`): Centralized session state management
 
-### Key Technologies
-
-- **[Streamlit](https://streamlit.io)**: Interactive web UI framework
-- **[FICO Xpress](https://www.fico.com/en/products/fico-xpress-optimization)**: Mixed-integer linear programming solver
-- **[Pydantic](https://pydantic-docs.helpmanual.io/)**: Data validation and settings management
-- **[python-holidays](https://github.com/dr-prodigy/python-holidays)**: Public holiday data for 100+ countries
-- **[pycountry](https://pypi.org/project/pycountry/)**: ISO country codes and names
-- **[pandas](https://pandas.pydata.org/)**: Data manipulation and analysis
-- **[calplot/matplotlib](https://matplotlib.org/)**: Calendar heatmap visualization
-
-## 🤝 Contributing
-
-Contributions are welcome! Please feel free to submit a Pull Request.
-
-1. Fork the repository
-2. Create your feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit your changes (`git commit -m 'feat: add amazing feature'`)
-4. Push to the branch (`git push origin feature/amazing-feature`)
-5. Open a Pull Request
-
-## 📝 License
+## License
 
 This project is licensed under the Apache License 2.0 - see the [LICENSE](LICENSE) file for details.
 
