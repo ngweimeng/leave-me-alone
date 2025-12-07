@@ -7,7 +7,7 @@ if str(project_root) not in sys.path:
     sys.path.insert(0, str(project_root))
 
 import calendar
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from typing import List, Tuple
 
 import streamlit as st
@@ -67,10 +67,10 @@ def init() -> None:
     # st.sidebar.title("Navigation")
 
     st.title("🌴 Leave Optimizer — Maximize Your Break")
-    st.subheader("Step 1 — Enter Your Days")
+    st.subheader("Step 1 — Enter PTO Days")
 
     st.markdown(
-        "Tell us how many paid time-off (PTO) days you have. "
+        "Tell us how many PTO days you have."
         "The optimizer will help you maximize them between your selected dates."
     )
 
@@ -139,7 +139,7 @@ def render_timeframe_selection() -> Tuple[date, date]:
 
 def render_public_holidays(user_input) -> List[date]:
     """Step 3: Select public holidays."""
-    st.subheader("Step 3 — Public Holidays")
+    st.subheader("Step 3 — Add Public Holidays")
 
     country_map = get_supported_country_map()
 
@@ -192,7 +192,7 @@ def render_public_holidays(user_input) -> List[date]:
 
 def render_style_preset(user_input) -> None:
     """Step 4: Choose vacation style preset."""
-    st.subheader("Step 4 — Choose Your Style")
+    st.subheader("Step 4 — Choose Your Vacation Style")
 
     style = st.radio("Vacation Style", list(PRESETS.keys()), index=0)
     st.caption(PRESETS[style]["desc"])
@@ -204,26 +204,98 @@ def render_style_preset(user_input) -> None:
 
 def render_prebooked_days(user_input) -> None:
     """Step 5: Allow user to add pre-booked days."""
-    st.subheader("Step 5 — Pre-booked Vacation Days (optional)")
+    st.subheader("Step 5 — Add Pre-booked Vacation Days (optional)")
+
+    st.caption("Add individual days or a date range for your pre-booked vacation.")
 
     add_col, show_col = st.columns([1, 2])
 
     with add_col:
-        new_pre = st.date_input("Add a day", value=user_input.start, key="new_pre")
-        if st.button("Add pre-booked day"):
-            ses.add_prebooked(new_pre)
+        # Toggle between single day and date range
+        input_mode = st.radio(
+            "Input mode",
+            ["Single Day", "Date Range"],
+            horizontal=True,
+            key="prebook_mode",
+        )
+
+        if input_mode == "Single Day":
+            new_pre = st.date_input(
+                "Select date", value=user_input.start, key="new_pre_single"
+            )
+            if st.button("Add Day", use_container_width=True):
+                ses.add_prebooked(new_pre)
+                st.rerun()
+        else:
+            col_start, col_end = st.columns(2)
+            with col_start:
+                range_start = st.date_input(
+                    "Start", value=user_input.start, key="pre_range_start"
+                )
+            with col_end:
+                range_end = st.date_input(
+                    "End", value=user_input.start, key="pre_range_end"
+                )
+
+            if st.button("Add Range", use_container_width=True):
+                if range_end < range_start:
+                    st.error("End date must be after start date")
+                else:
+                    # Add all days in the range
+                    current = range_start
+                    while current <= range_end:
+                        ses.add_prebooked(current)
+                        current += timedelta(days=1)
+                    st.rerun()
 
     with show_col:
         prebooked = ses.get_prebooked()
         if not prebooked:
             st.caption("No pre-booked days added.")
         else:
-            st.markdown("**Current pre-booked days:**")
-            for i, d in enumerate(prebooked):
-                col_left, col_right = st.columns([3, 1])
-                col_left.write(d.isoformat())
-                if col_right.button("Remove", key=f"rm_pre_{i}"):
-                    ses.remove_prebooked(d)
+            st.markdown(f"**Pre-booked days ({len(prebooked)}):**")
+
+            # Group consecutive days for better display
+            if prebooked:
+                sorted_days = sorted(prebooked)
+                display_items = []
+
+                i = 0
+                while i < len(sorted_days):
+                    start_day = sorted_days[i]
+                    end_day = start_day
+
+                    # Find consecutive days
+                    while i + 1 < len(sorted_days) and sorted_days[
+                        i + 1
+                    ] == sorted_days[i] + timedelta(days=1):
+                        i += 1
+                        end_day = sorted_days[i]
+
+                    if start_day == end_day:
+                        display_items.append((start_day, None))
+                    else:
+                        display_items.append((start_day, end_day))
+                    i += 1
+
+                for idx, item in enumerate(display_items):
+                    col_left, col_right = st.columns([3, 1])
+                    if item[1] is None:
+                        # Single day
+                        col_left.write(item[0].isoformat())
+                        if col_right.button("✕", key=f"rm_pre_{idx}"):
+                            ses.remove_prebooked(item[0])
+                            st.rerun()
+                    else:
+                        # Date range
+                        col_left.write(f"{item[0].isoformat()} → {item[1].isoformat()}")
+                        if col_right.button("✕", key=f"rm_pre_{idx}"):
+                            # Remove all days in this range
+                            current = item[0]
+                            while current <= item[1]:
+                                ses.remove_prebooked(current)
+                                current += timedelta(days=1)
+                            st.rerun()
 
     user_input.prebooked_days = list(ses.get_prebooked())
     st.markdown("---")
@@ -231,7 +303,11 @@ def render_prebooked_days(user_input) -> None:
 
 def render_other_time_off(user_input) -> None:
     """Step 6: Add other non-PTO time off."""
-    st.subheader("Step 6 — Other Additional Time Off (optional)")
+    st.subheader("Step 6 — Add other non-PTO Time Off")
+
+    st.caption(
+        "Add company-wide days off or missing public holidays so they won’t count against your PTO."
+    )
 
     col_date, col_label, col_add = st.columns([2, 3, 1])
     with col_date:
