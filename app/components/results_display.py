@@ -126,24 +126,37 @@ def render_break_cards(
 # ----------------------------------------------------
 # Main Results Rendering
 # ----------------------------------------------------
-def show_results(result: Dict[str, Any]):
+def show_results(result: Dict[str, Any], prebook_pto_count: int = 0):
     # Convert incoming values to real date objects
     break_days: List[date] = sorted(_coerce_to_dates(result.get("break_days", [])))
     leave_days: List[date] = _coerce_to_dates(result.get("leave_days", []))
     public_holidays: List[date] = _coerce_to_dates(result.get("public_holidays", []))
+    prebooked_days: List[date] = _coerce_to_dates(result.get("prebooked_days", []))
+
+    # Merge prebooked days into break_days for display
+    all_break_days = sorted(set(break_days + prebooked_days))
+
+    # leave_days from optimizer now includes ALL PTO days (prebooked + optimized)
+    # since we pass the full budget to the optimizer
+    all_leave_days = leave_days
+    total_pto_used = len(leave_days)
 
     break_periods: List[Dict[str, Any]] = []
 
     # Build continuous break periods
-    if break_days:
-        start = break_days[0]
-        end = break_days[0]
-        pto_count = 1 if start in leave_days else 0
+    if all_break_days:
+        start = all_break_days[0]
+        end = all_break_days[0]
 
-        for d in break_days[1:]:
+        # leave_days already includes all PTO days (both prebooked and optimized)
+        all_pto_days_set = set(leave_days)
+
+        pto_count = 1 if start in all_pto_days_set else 0
+
+        for d in all_break_days[1:]:
             if d == end + timedelta(days=1):
                 end = d
-                if d in leave_days:
+                if d in all_pto_days_set:
                     pto_count += 1
             else:
                 break_periods.append(
@@ -155,7 +168,7 @@ def show_results(result: Dict[str, Any]):
                     }
                 )
                 start, end = d, d
-                pto_count = 1 if d in leave_days else 0
+                pto_count = 1 if d in all_pto_days_set else 0
 
         break_periods.append(
             {
@@ -183,7 +196,7 @@ def show_results(result: Dict[str, Any]):
         st.subheader("📊 Summary")
         col1, col2, col3 = st.columns(3)
         col1.metric("Total Break Days", total_break_days)
-        col2.metric("PTO Used", len(leave_days))
+        col2.metric("PTO Used", total_pto_used)
         col3.metric("Break Periods", len(filtered))
 
         # Cards
@@ -191,15 +204,15 @@ def show_results(result: Dict[str, Any]):
 
         # Calendar View
         # Pick year (from first break day or current year)
-        if break_days:
-            year = break_days[0].year
+        if all_break_days:
+            year = all_break_days[0].year
         else:
             year = date.today().year
 
         try:
             render_calendar_heatmap(
-                break_days,
-                leave_days,
+                all_break_days,
+                all_leave_days,
                 year,
                 holiday_map={d: d.strftime("%b %d") for d in public_holidays},
             )

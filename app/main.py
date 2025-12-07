@@ -197,6 +197,11 @@ def render_public_holidays(user_input) -> List[date]:
     return selected_dates
 
 
+def _is_weekend(d: date) -> bool:
+    """Check if a date is a weekend (Saturday=5, Sunday=6)."""
+    return d.weekday() >= 5
+
+
 def render_style_preset(user_input) -> None:
     st.subheader("Step 4 — Select Vacation Style")
     st.markdown("Choose a vacation preference to guide how PTO days are distributed.")
@@ -211,12 +216,13 @@ def render_style_preset(user_input) -> None:
     st.markdown("---")
 
 
-def render_prebooked_days(user_input) -> None:
+def render_prebooked_days(user_input, public_holidays: List[date]) -> None:
     """Step 5: Allow user to add pre-booked days."""
     st.subheader("Step 5 — Add Pre-booked Vacation Days (optional)")
 
     st.markdown(
-        "Specify individual dates or a date range for vacation days that have already been scheduled. These will be excluded from optimization."
+        "Specify individual dates or a date range for vacation days that have already been scheduled. "
+        "These will be excluded from optimization. **Note:** Weekends and public holidays won't count against your PTO."
     )
 
     add_col, show_col = st.columns([1, 2])
@@ -264,7 +270,13 @@ def render_prebooked_days(user_input) -> None:
         if not prebooked:
             st.caption("No pre-booked days added.")
         else:
-            st.markdown(f"**Pre-booked days ({len(prebooked)}):**")
+            # Count how many days actually use PTO (exclude weekends and PHs)
+            pto_days = [
+                d for d in prebooked if not _is_weekend(d) and d not in public_holidays
+            ]
+            st.markdown(
+                f"**Pre-booked days ({len(prebooked)} total, {len(pto_days)} using PTO):**"
+            )
 
             # Group consecutive days for better display
             if prebooked:
@@ -293,7 +305,11 @@ def render_prebooked_days(user_input) -> None:
                     col_left, col_right = st.columns([3, 1])
                     if item[1] is None:
                         # Single day
-                        col_left.write(item[0].isoformat())
+                        is_pto = (
+                            not _is_weekend(item[0]) and item[0] not in public_holidays
+                        )
+                        day_type = "" if is_pto else " (Weekend/PH)"
+                        col_left.write(f"{item[0].isoformat()}{day_type}")
                         if col_right.button("✕", key=f"rm_pre_{idx}"):
                             ses.remove_prebooked(item[0])
                             st.rerun()
@@ -345,9 +361,19 @@ def render_other_time_off(user_input) -> None:
 
 def render_optimize_button(user_input, selected_ph_dates: List[date]) -> None:
     """Step 7: Optimize button and processing."""
-    prebook_count = len(user_input.prebooked_days)
+    prebooked = user_input.prebooked_days
+
+    # Get additional off days and combine with public holidays
+    additional_off = [d for d, _ in ses.get_other_time_off()]
+    all_public_holidays = list(set(selected_ph_dates + additional_off))
+
+    # Only count prebooked days that are NOT weekends or public holidays
+    prebook_pto_count = sum(
+        1 for d in prebooked if not _is_weekend(d) and d not in all_public_holidays
+    )
+
     total_pto = int(st.session_state.get("leave_available_total", 0))
-    remaining = max(total_pto - prebook_count, 0)
+    remaining = max(total_pto - prebook_pto_count, 0)
 
     if remaining == 0:
         st.warning("No remaining PTO after accounting for pre-booked days.")
@@ -359,22 +385,24 @@ def render_optimize_button(user_input, selected_ph_dates: List[date]) -> None:
             st.error("At least 1 PTO day is required to optimize.")
             return
 
-        additional_off = [d for d, _ in ses.get_other_time_off()]
-        public_holidays = list({d: True for d in (selected_ph_dates + additional_off)})
-
+        # Pass the FULL PTO budget to optimizer, not just remaining
+        # The optimizer will account for prebooked days internally
         result = run_optimizer(
             start=user_input.start,
             end=user_input.end,
-            public_holidays=public_holidays,
-            leave_available=remaining,
+            public_holidays=all_public_holidays,
+            leave_available=total_pto,  # Use full budget, not remaining
             adjacency_weight=user_input.adjacency_weight,
             prebooked_days=user_input.prebooked_days,
             min_stretch=user_input.min_stretch,
             max_stretch=user_input.max_stretch,
         )
 
+        # Update result with the combined public holidays list for accurate display
+        result["public_holidays"] = all_public_holidays
+
         st.success("✅ Optimization Completed!")
-        show_results(result)
+        show_results(result, prebook_pto_count)
 
 
 # -------------------------------------------------------------------
@@ -400,7 +428,7 @@ def main() -> None:
 
     selected_ph_dates = render_public_holidays(user_input)
     render_style_preset(user_input)
-    render_prebooked_days(user_input)
+    render_prebooked_days(user_input, selected_ph_dates)
     render_other_time_off(user_input)
     render_optimize_button(user_input, selected_ph_dates)
 
