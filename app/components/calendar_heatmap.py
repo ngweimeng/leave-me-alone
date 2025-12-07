@@ -43,13 +43,21 @@ def render_calendar_heatmap(break_days, leave_days, year, holiday_map=None):
     if holiday_map is None:
         holiday_map = {}
 
+    # Color mapping: 0=white, 1=weekend, 2=holiday, 3=PTO
+    colorscale = [
+        [0, "white"],
+        [0.33, "#efefef"],  # weekend
+        [0.66, "#ffd54f"],  # holiday
+        [1, "#ff6b6b"],  # PTO
+    ]
+
     # Create subplots: 4 rows x 3 columns
     fig = make_subplots(
         rows=4,
         cols=3,
         subplot_titles=[calendar.month_name[i] for i in range(1, 13)],
-        horizontal_spacing=0.05,
-        vertical_spacing=0.08,
+        horizontal_spacing=0.06,
+        vertical_spacing=0.10,
         specs=[[{"type": "xy"}] * 3 for _ in range(4)],
     )
 
@@ -61,7 +69,14 @@ def render_calendar_heatmap(break_days, leave_days, year, holiday_map=None):
 
         month_cal = calendar.monthcalendar(year, month)
 
-        # Prepare data for heatmap
+        # Prepare matrices for heatmap
+        z_vals = []  # Color values
+        text_vals = []  # Day numbers
+        hover_vals = []  # Hover text
+        x_vals = []
+        y_vals = []
+
+        # Prepare data for each day
         for week_idx, week in enumerate(month_cal):
             for dow, day in enumerate(week):
                 if day == 0:
@@ -69,82 +84,71 @@ def render_calendar_heatmap(break_days, leave_days, year, holiday_map=None):
 
                 d = _dt.date(year, month, day)
 
-                # Determine color and label
+                # Determine color value and label
                 if d in ld_set:
-                    color = "#ff6b6b"
+                    z_val = 3
                     label = "PTO Day"
-                    text_color = "white"
                 elif d in ph_set:
-                    color = "#ffd54f"
+                    z_val = 2
                     label = holiday_map.get(d, "Public Holiday")
-                    text_color = "black"
                 elif d.weekday() >= 5:
-                    color = "#efefef"
+                    z_val = 1
                     label = "Weekend"
-                    text_color = "gray"
                 else:
-                    color = "white"
+                    z_val = 0
                     label = "Workday"
-                    text_color = "black"
 
-                # Add rectangle
-                fig.add_shape(
-                    type="rect",
-                    x0=dow,
-                    y0=-week_idx - 1,
-                    x1=dow + 1,
-                    y1=-week_idx,
-                    fillcolor=color,
+                x_vals.append(dow + 0.5)
+                y_vals.append(-week_idx - 0.5)
+                z_vals.append(z_val)
+                text_vals.append(str(day))
+                hover_vals.append(f"{d.strftime('%A, %b %d')}<br>{label}")
+
+        # Add single heatmap trace for the entire month
+        fig.add_trace(
+            go.Scatter(
+                x=x_vals,
+                y=y_vals,
+                mode="markers+text",
+                marker=dict(
+                    size=50,  # Increased size for better cell coverage
+                    color=z_vals,
+                    colorscale=colorscale,
+                    cmin=0,
+                    cmax=3,
                     line=dict(color="lightgray", width=1),
-                    row=row,
-                    col=col,
-                )
-
-                # Add invisible scatter point for hover
-                hover_text = f"{d.strftime('%A, %B %d, %Y')}<br>{label}"
-                fig.add_trace(
-                    go.Scatter(
-                        x=[dow + 0.5],
-                        y=[-week_idx - 0.5],
-                        mode="markers",
-                        marker=dict(size=20, opacity=0),  # Invisible but hoverable
-                        hovertext=hover_text,
-                        hoverinfo="text",
-                        showlegend=False,
-                    ),
-                    row=row,
-                    col=col,
-                )
-
-                # Add day number as annotation (always visible)
-                fig.add_annotation(
-                    x=dow + 0.5,
-                    y=-week_idx - 0.5,
-                    text=str(day),
-                    showarrow=False,
-                    font=dict(size=10, color=text_color),
-                    xref=f"x{(row - 1) * 3 + col}" if row > 1 or col > 1 else "x",
-                    yref=f"y{(row - 1) * 3 + col}" if row > 1 or col > 1 else "y",
-                )
+                    symbol="square",
+                ),
+                text=text_vals,
+                textfont=dict(size=11, color="black"),
+                hovertext=hover_vals,
+                hoverinfo="text",
+                showlegend=False,
+            ),
+            row=row,
+            col=col,
+        )
 
         # Update axes for this subplot
         fig.update_xaxes(
-            range=[0, 7],
+            range=[-0.1, 7.1],  # Slightly expanded range for better spacing
             showticklabels=True,
             tickvals=[i + 0.5 for i in range(7)],
             ticktext=weekday_names,
-            tickfont=dict(size=8),
+            tickfont=dict(size=9),
             showgrid=False,
             zeroline=False,
+            fixedrange=True,
             row=row,
             col=col,
         )
 
         fig.update_yaxes(
-            range=[-len(month_cal), 1],
+            range=[-len(month_cal) - 0.1, 0.1],  # Adjusted for better fit
             showticklabels=False,
             showgrid=False,
             zeroline=False,
+            fixedrange=True,
             row=row,
             col=col,
         )
@@ -183,13 +187,15 @@ def render_calendar_heatmap(break_days, leave_days, year, holiday_map=None):
 
     # Update layout
     fig.update_layout(
-        height=1000,
+        height=1100,  # Increased height for better cell proportions
         showlegend=False,
         hovermode="closest",
-        margin=dict(t=80, b=20, l=20, r=20),  # Reduced top margin since no title
+        margin=dict(t=80, b=20, l=20, r=20),
+        plot_bgcolor="white",
+        paper_bgcolor="white",
     )
 
-    st.plotly_chart(fig, use_container_width=True)
+    st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
 
 
 def _as_date(d):
