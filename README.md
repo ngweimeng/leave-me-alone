@@ -127,7 +127,7 @@ leave-me-alone/
 └── README.md                      # This file
 ```
 
-### Technical Appendix: Leave Optimization Model (Linear Programming Formulation)
+## Technical Appendix: Leave Optimization Model (Linear Programming Formulation)
 
 We optimize which days to take leave in order to maximize total break time
 (weekends, public holidays, and allocated leave days), while respecting
