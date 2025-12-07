@@ -122,7 +122,8 @@ leave-me-alone/
 │       ├── test_leave_model.py
 │       └── test_optimization_service.py
 ├── requirements.txt               # Python dependencies
-├── makefile                       # Common commands
+├── run_app.sh                     # Launch application
+├── run_check.sh                   # Format code + run tests
 ├── LICENSE                        # Apache 2.0 license
 └── README.md                      # This file
 ```
