@@ -64,4 +64,5 @@ def run_optimizer(
         "break_days": break_days,
         "leave_days": leave_days,
         "year": start.year,
+        "public_holidays": list(public_holidays),
     }

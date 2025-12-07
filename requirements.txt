@@ -5,7 +5,6 @@ pydantic
 python-dateutil
 pytest
 pandas
-calplot
-matplotlib
+plotly
 pycountry
 black
