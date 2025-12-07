@@ -31,10 +31,7 @@ ses = SessionManager()
 # -------------------------------------------------------------------
 def _format_range(start: date, end: date) -> str:
     """Format a date range safely for UI."""
-    try:
-        return f"{start.strftime('%b %d, %Y')} → {end.strftime('%b %d, %Y')}"
-    except Exception:
-        return f"{start} → {end}"
+    return f"{start.strftime('%b %d, %Y')} → {end.strftime('%b %d, %Y')}"
 
 
 PRESETS = {
@@ -67,7 +64,7 @@ PRESETS = {
 def init() -> None:
     """Initialize page layout and header."""
     st.set_page_config(page_title="Leave Optimizer", page_icon="🌴", layout="wide")
-    st.sidebar.title("Navigation")
+    # st.sidebar.title("Navigation")
 
     st.title("🌴 Leave Optimizer — Maximize Your Break")
     st.subheader("Step 1 — Enter Your Days")
@@ -144,14 +141,11 @@ def render_public_holidays(user_input) -> List[date]:
     """Step 3: Select public holidays."""
     st.subheader("Step 3 — Public Holidays")
 
-    try:
-        country_map = get_supported_country_map()
-    except Exception:
-        country_map = {}
+    country_map = get_supported_country_map()
 
     ph_country = st.selectbox(
         "Country (for public holidays)",
-        options=sorted(country_map.keys()) if country_map else ["AW"],
+        options=sorted(country_map.keys()),
         format_func=lambda c: country_map.get(c, c),
     )
     user_input.country = ph_country
@@ -161,7 +155,8 @@ def render_public_holidays(user_input) -> List[date]:
     try:
         for year in range(user_input.start.year, user_input.end.year + 1):
             ph_candidates += get_public_holiday_map(ph_country, year)
-    except Exception:
+    except Exception as e:
+        st.warning(f"⚠️ Could not load holidays for {ph_country}: {str(e)}")
         ph_candidates = []
 
     # Filter to timeframe
@@ -182,10 +177,7 @@ def render_public_holidays(user_input) -> List[date]:
             df["date"] = df["date"].apply(lambda d: d.isoformat())
             df["include"] = True
 
-            try:
-                edited = st.data_editor(df, num_rows="fixed", width="stretch")
-            except Exception:
-                edited = st.experimental_data_editor(df, num_rows="fixed")
+            edited = st.data_editor(df, num_rows="fixed", width="stretch")
 
             if edited is not None:
                 for _, row in edited.iterrows():
@@ -205,10 +197,7 @@ def render_style_preset(user_input) -> None:
     style = st.radio("Vacation Style", list(PRESETS.keys()), index=0)
     st.caption(PRESETS[style]["desc"])
 
-    try:
-        user_input.adjacency_weight = PRESETS[style]["weight"]
-    except Exception:
-        pass
+    user_input.adjacency_weight = PRESETS[style]["weight"]
 
     st.markdown("---")
 
