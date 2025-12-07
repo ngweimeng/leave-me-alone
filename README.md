@@ -79,7 +79,7 @@ A Streamlit application that uses FICO Xpress optimization to help you get the m
    - Calendar heatmap visualization
    - Detailed breakdown of leave days
 
-## 🏗️ Project Structure
+## Project Structure
 
 ```
 leave-me-alone/
