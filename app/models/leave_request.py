@@ -10,3 +10,4 @@ class LeaveOptimizationRequest(BaseModel):
     start: date
     end: date
     blocked_days: List[date]
+    prebooked_days: List[date] = []

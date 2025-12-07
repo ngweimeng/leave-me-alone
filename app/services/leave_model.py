@@ -1,6 +1,9 @@
 import xpress as xp
 
-def solve_leave_lp(date_range, holidays, blocked_days, leave_available, adjacency_weight: float = 1.0):
+
+def solve_leave_lp(
+    date_range, holidays, blocked_days, leave_available, adjacency_weight: float = 1.0, prebooked_days=None
+):
     m = xp.problem()
 
     x = {d: xp.var(vartype=xp.binary) for d in date_range}  # leave days
@@ -18,7 +21,14 @@ def solve_leave_lp(date_range, holidays, blocked_days, leave_available, adjacenc
 
     # Cannot take leave on blocked days
     for d in blocked_days:
-        m.addConstraint(x[d] == 0)
+        if d in x:
+            m.addConstraint(x[d] == 0)
+
+    # Force prebooked days to be leave days (they count toward the leave budget)
+    if prebooked_days:
+        for d in prebooked_days:
+            if d in x:
+                m.addConstraint(x[d] == 1)
 
     # Leave budget
     m.addConstraint(xp.Sum(x[d] for d in date_range) <= leave_available)
