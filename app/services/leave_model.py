@@ -1,7 +1,18 @@
 """
 Leave optimization model using linear programming.
 
-This module defines a linear optimization model that allocates leave days to
+This module defines a linear     # 3. Break day logic
+    for d in date_range:
+        is_weekend_or_holiday = (d.weekday() >= 5) or (d in holidays)
+
+        if is_weekend_or_holiday:
+            # Automatically a break day
+            model.addConstraint(break_vars[d] == 1)
+        else:
+            # Only a break if leave is taken
+            model.addConstraint(break_vars[d] <= leave_vars[d])
+
+    # 4. Adjacency logic: adj = break[i] AND break[i+1] model that allocates leave days to
 maximize total break time (weekends + holidays + leave) while respecting
 constraints such as:
 - leave budget
@@ -22,7 +33,6 @@ warnings.filterwarnings("ignore", category=UserWarning, module="xpress")
 def solve_leave_lp(
     date_range: List[date],
     holidays: Set[date],
-    blocked_days: Set[date],
     leave_available: int,
     adjacency_weight: float = 1.0,
     prebooked_days: Optional[Set[date]] = None,
@@ -33,7 +43,6 @@ def solve_leave_lp(
     Args:
         date_range: Ordered list of dates to consider.
         holidays: Set of public holidays (always treated as break days).
-        blocked_days: Set of dates where leave cannot be taken.
         leave_available: Maximum number of leave days available.
         adjacency_weight: Weight applied to consecutive break-day bonuses.
         prebooked_days: Optional set of dates already confirmed as leave.
@@ -52,11 +61,6 @@ def solve_leave_lp(
 
     if leave_available < 0:
         raise ValueError("Leave available cannot be negative")
-
-    if prebooked_days:
-        conflicts = prebooked_days & blocked_days
-        if conflicts:
-            raise ValueError(f"Prebooked days conflict with blocked days: {conflicts}")
 
     # ------------------------------
     # Create optimization model
@@ -81,21 +85,16 @@ def solve_leave_lp(
     # Constraints
     # ------------------------------
 
-    # 1. Leave cannot be taken on blocked days
-    for d in blocked_days:
-        if d in leave_vars:
-            model.addConstraint(leave_vars[d] == 0)
-
-    # 2. Prebooked leave must be respected
+    # 1. Prebooked leave must be respected
     if prebooked_days:
         for d in prebooked_days:
             if d in leave_vars:
                 model.addConstraint(leave_vars[d] == 1)
 
-    # 3. Leave budget
+    # 2. Leave budget
     model.addConstraint(xp.Sum(leave_vars[d] for d in date_range) <= leave_available)
 
-    # 4. Break day logic
+    # 3. Break day logic
     for d in date_range:
         is_weekend_or_holiday = (d.weekday() >= 5) or (d in holidays)
 

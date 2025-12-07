@@ -279,7 +279,6 @@ def render_optimize_button(user_input, selected_ph_dates: List[date]) -> None:
             start=user_input.start,
             end=user_input.end,
             public_holidays=public_holidays,
-            blocked_days=user_input.blocked_days,
             leave_available=remaining,
             adjacency_weight=user_input.adjacency_weight,
             prebooked_days=user_input.prebooked_days,
@@ -307,7 +306,6 @@ def main() -> None:
         adjacency_weight=1.0,
         start=start,
         end=end,
-        blocked_days=[],
         prebooked_days=[],
     )
 

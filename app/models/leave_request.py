@@ -10,5 +10,4 @@ class LeaveOptimizationRequest(BaseModel):
     adjacency_weight: float = 1.0
     start: date
     end: date
-    blocked_days: List[date]
     prebooked_days: List[date] = []
