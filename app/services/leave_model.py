@@ -52,7 +52,7 @@ def solve_leave_lp(
         date_range: Ordered list of dates to evaluate.
         holidays: Set of public holidays (treated automatically as break days).
         leave_available: Maximum number of leave days available.
-        adjacency_weight: Bonus weight for consecutive break days.
+        adjacency_weight: Bonus weight for consecutive break days (higher = longer breaks).
         prebooked_days: Dates already locked in as leave.
 
     Returns:
@@ -160,6 +160,8 @@ def solve_leave_lp(
     # Maximize:
     #   total break days
     # + adjacency bonus for longer continuous vacations
+    #
+    # Higher adjacency_weight → longer, more consolidated breaks
     # --------------------------------------------------------------
     model.setObjective(
         xp.Sum(break_vars[d] for d in date_range)

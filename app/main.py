@@ -36,24 +36,20 @@ def _format_range(start: date, end: date) -> str:
 
 PRESETS = {
     "Recommended (Balanced Mix)": {
-        "weight": 1.0,
+        "weight": 1.5,
         "desc": "A smart blend of short breaks and longer vacations.",
     },
-    "Long Weekends": {
-        "weight": 1.8,
-        "desc": "More 3–4 day weekends throughout the year.",
+    "Long Weekends (3-4 days)": {
+        "weight": 2.0,
+        "desc": "Multiple 3-4 day weekends throughout the year.",
     },
-    "Mini Breaks": {
-        "weight": 1.2,
-        "desc": "Several shorter 5–6 day breaks spread across the year.",
-    },
-    "Week-long Breaks": {
-        "weight": 2.5,
-        "desc": "Focused on 7–9 day breaks for more substantial time off.",
-    },
-    "Extended Vacations": {
+    "Week-Long Breaks (entire week)": {
         "weight": 4.0,
-        "desc": "Longer 10–15 day vacations for deeper relaxation.",
+        "desc": "Full week-long breaks (7-9 days) for substantial time off.",
+    },
+    "Extended Vacations (>2 weeks)": {
+        "weight": 8.0,
+        "desc": "2 weeks or more vacations (>14 days) for deeper relaxation.",
     },
 }
 

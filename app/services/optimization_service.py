@@ -24,7 +24,7 @@ def run_optimizer(
         leave_available (int):
             Maximum number of leave days the user can allocate.
         adjacency_weight (float):
-            Extra reward for consecutive break days in the objective function.
+            Extra reward for consecutive break days (higher = longer breaks).
         prebooked_days (Iterable[date], optional):
             Days the user has already committed to taking as leave.
 
