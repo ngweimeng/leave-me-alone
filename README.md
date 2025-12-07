@@ -1,4 +1,4 @@
-# Leave Optimizer
+# Leave-Me-Alone: PTO Optimizer
 
 > Scientifically maximize your vacation time using linear programming, public holidays, and strategic PTO allocation.
 
@@ -7,14 +7,6 @@ A Streamlit application that uses FICO Xpress optimization to help you get the m
 [![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
 [![Python](https://img.shields.io/badge/python-3.8+-blue.svg)](https://www.python.org/downloads/)
 [![Streamlit](https://img.shields.io/badge/streamlit-1.0+-red.svg)](https://streamlit.io)
-
-## Features
-
-- **Smart Optimization**: Uses linear programming (MILP) to maximize consecutive break days
-- **Vacation Style Presets**: Choose from balanced mix, long weekends, mini breaks, week-long vacations, or extended vacations
-- **Public Holiday Integration**: Automatically fetches public holidays for 100+ countries via the `holidays` library
-- **Pre-booked Days**: Constrain the optimizer around days you've already committed to taking off
-- **Additional Time Off**: Add company-wide holidays, personal days, or other non-PTO time off
 
 ## Quick Start
 
@@ -135,33 +127,114 @@ leave-me-alone/
 └── README.md                      # This file
 ```
 
-## Development
+### Technical Appendix: Leave Optimization Model (Linear Programming Formulation)
 
-### Running Tests
+We optimize which days to take leave in order to maximize total break time
+(weekends, public holidays, and allocated leave days), while respecting
+a leave budget and encouraging longer continuous breaks.
 
-```bash
-make test
-# or
-pytest -q
-```
+#### Sets and Indexing
 
-### Code Formatting
+- $D$ : ordered set of dates in the planning horizon  
+- $H \subseteq D$ : set of dates that are weekends or public holidays  
+- $P \subseteq D$ : set of dates pre-booked as leave  
+- For convenience, we denote by $d^+$ the next day after $d$ in $D$
+  (i.e. the successor of $d$ in the ordered set).
 
-```bash
-make fmt
-# or
-black app tests
-```
+#### Parameters
 
-### Architecture Overview
+- $L \in \mathbb{Z}_{\ge 0}$ : total number of leave days available  
+- $\alpha \in \mathbb{R}_{\ge 0}$ : adjacency weight (bonus for consecutive break days)
 
-The application follows a clean architecture pattern:
+#### Decision Variables
 
-- **UI Layer** (`main.py`): Orchestrates the step-by-step user flow
-- **Components** (`components/`): Reusable UI widgets and visualizations
-- **Services** (`services/`): Business logic and external integrations
-- **Models** (`models/`): Type-safe data structures using Pydantic
-- **State** (`state/`): Centralized session state management
+For each day $d \in D$:
+
+- $l_d \in \{0,1\}$  
+  - $l_d = 1$ if we take leave on day $d$  
+- $b_d \in \{0,1\}$  
+  - $b_d = 1$ if day $d$ is a break day
+    (weekend/holiday or leave on a weekday)
+
+For each day $d \in D$ except the last:
+
+- $a_d \in \{0,1\}$  
+  - $a_d = 1$ if both $d$ and its successor $d^+$ are break days
+    (used to reward consecutive breaks)
+
+#### Objective
+
+Maximize the total number of break days plus an adjacency bonus
+for consecutive break sequences:
+
+\[
+\max \quad 
+\sum_{d \in D} b_d 
+\;+\;
+\alpha \sum_{d \in D \setminus \{\text{last day}\}} a_d
+\]
+
+#### Constraints
+
+1. **Pre-booked leave must be honored**
+
+For all $d \in P$:
+\[
+l_d = 1
+\]
+
+2. **Leave budget**
+
+The total number of leave days cannot exceed the available budget:
+\[
+\sum_{d \in D} l_d \;\le\; L
+\]
+
+3. **Break-day logic**
+
+- Weekends and public holidays are always break days:
+
+For all $d \in H$:
+\[
+b_d = 1
+\]
+
+- Weekdays can only become break days if leave is taken:
+
+For all $d \in D \setminus H$:
+\[
+b_d \le l_d
+\]
+
+4. **Adjacency (consecutive break days)**
+
+For each day $d \in D$ that has a successor $d^+$:
+
+\[
+\begin{aligned}
+a_d &\le b_d \\
+a_d &\le b_{d^+} \\
+a_d &\ge b_d + b_{d^+} - 1
+\end{aligned}
+\]
+
+These three constraints linearize the logical condition
+\[
+a_d = b_d \land b_{d^+}
+\]
+so that $a_d = 1$ if and only if both $b_d$ and $b_{d^+}$ are 1.
+
+#### Variable Domains
+
+For all $d \in D$:
+\[
+l_d, b_d \in \{0,1\}
+\]
+
+For all $d \in D$ with a successor $d^+$:
+\[
+a_d \in \{0,1\}
+\]
 
 ## License
 
