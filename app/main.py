@@ -70,8 +70,8 @@ def init() -> None:
     st.subheader("Step 1 — Enter PTO Days")
 
     st.markdown(
-        "Tell us how many PTO days you have."
-        "The optimizer will help you maximize them between your selected dates."
+        "Specify the total number of paid time-off days available. "
+        "The optimizer will strategically allocate them within the selected timeframe."
     )
 
 
@@ -96,8 +96,8 @@ def render_pto_input() -> int:
 
 def render_timeframe_selection() -> Tuple[date, date]:
     """Step 2: Select timeframe."""
-    st.subheader("Step 2 — Select Your Timeframe")
-    st.markdown("Choose the period you want to optimize.")
+    st.subheader("Step 2 — Select Optimization Timeframe")
+    st.markdown("Define the period within which PTO days will be optimized.")
 
     tf_option = st.radio(
         "Timeframe selection",
@@ -139,7 +139,10 @@ def render_timeframe_selection() -> Tuple[date, date]:
 
 def render_public_holidays(user_input) -> List[date]:
     """Step 3: Select public holidays."""
-    st.subheader("Step 3 — Add Public Holidays")
+    st.subheader("Step 3 — Select Public Holidays")
+    st.markdown(
+        "Choose which public holidays to include in the optimization. Selected holidays will be treated as non-working days."
+    )
 
     country_map = get_supported_country_map()
 
@@ -192,7 +195,10 @@ def render_public_holidays(user_input) -> List[date]:
 
 def render_style_preset(user_input) -> None:
     """Step 4: Choose vacation style preset."""
-    st.subheader("Step 4 — Choose Your Vacation Style")
+    st.subheader("Step 4 — Select Vacation Style")
+    st.markdown(
+        "Choose a vacation preference to guide how PTO days are distributed throughout the timeframe."
+    )
 
     style = st.radio("Vacation Style", list(PRESETS.keys()), index=0)
     st.caption(PRESETS[style]["desc"])
@@ -206,7 +212,9 @@ def render_prebooked_days(user_input) -> None:
     """Step 5: Allow user to add pre-booked days."""
     st.subheader("Step 5 — Add Pre-booked Vacation Days (optional)")
 
-    st.caption("Add individual days or a date range for your pre-booked vacation.")
+    st.markdown(
+        "Specify individual dates or a date range for vacation days that have already been scheduled. These will be excluded from optimization."
+    )
 
     add_col, show_col = st.columns([1, 2])
 
@@ -305,7 +313,7 @@ def render_other_time_off(user_input) -> None:
     """Step 6: Add other non-PTO time off."""
     st.subheader("Step 6 — Add other non-PTO Time Off")
 
-    st.caption(
+    st.markdown(
         "Add company-wide days off or missing public holidays so they won’t count against your PTO."
     )
 
