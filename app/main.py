@@ -1,10 +1,17 @@
+import sys
+from pathlib import Path
+
+# Add the project root to Python path to enable 'app' package imports
+project_root = Path(__file__).parent.parent
+if str(project_root) not in sys.path:
+    sys.path.insert(0, str(project_root))
+
 import calendar
 from datetime import date, datetime
 from typing import List, Tuple
 
 import streamlit as st
 
-from app.components.inputs import render_inputs
 from app.models.leave_request import LeaveOptimizationRequest
 from app.components.results_display import show_results
 from app.services.holiday_service import (
