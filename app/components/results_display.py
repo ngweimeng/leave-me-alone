@@ -6,6 +6,59 @@ from app.components.calendar_heatmap import render_calendar_heatmap
 
 
 # ----------------------------------------------------
+# Solver Benchmark Comparison
+# ----------------------------------------------------
+def show_benchmark(rows, diverge: bool) -> None:
+    """Render a comparison table across solver backends.
+
+    ``rows`` is a list of BenchmarkRow; ``diverge`` is True when the backends
+    returned different (but equally optimal) leave schedules.
+    """
+    st.subheader("⚙️ Solver Benchmark")
+
+    if not rows:
+        st.info("No solvers were run.")
+        return
+
+    table = [
+        {
+            "Solver": r.result.stats.solver,
+            "Status": r.result.stats.status,
+            "Objective": r.result.stats.objective,
+            "Solve Time (s)": round(r.result.stats.solve_time_s, 4),
+            "Variables": r.result.stats.num_variables,
+            "Constraints": r.result.stats.num_constraints,
+            "Break Days": r.result.stats.num_break_days,
+            "PTO Used": r.result.stats.num_leave_days,
+        }
+        for r in rows
+    ]
+    st.dataframe(pd.DataFrame(table), hide_index=True, width="stretch")
+
+    objectives = {
+        r.result.stats.objective for r in rows if r.result.stats.objective is not None
+    }
+    if len(objectives) <= 1:
+        st.caption(
+            "✅ All solvers reached the same optimal objective — as expected for a "
+            "model this size."
+        )
+    else:
+        st.caption(
+            "⚠️ Solvers reported different objectives (check time limits / gaps)."
+        )
+
+    if diverge:
+        st.info(
+            "🔀 Solvers chose **different but equally optimal** schedules — the optimum "
+            "is not unique, so more than one set of PTO days yields the same total break. "
+            "The calendar below shows one of them."
+        )
+
+    st.markdown("---")
+
+
+# ----------------------------------------------------
 # Break Type Label
 # ----------------------------------------------------
 def classify_break(days: int) -> str:

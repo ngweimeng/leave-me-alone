@@ -13,12 +13,13 @@ from typing import List, Tuple
 import streamlit as st
 
 from app.models.leave_request import LeaveOptimizationRequest
-from app.components.results_display import show_results
+from app.components.results_display import show_benchmark, show_results
 from app.services.holiday_service import (
     get_public_holiday_map,
     get_supported_country_map,
 )
-from app.services.optimization_service import run_optimizer
+from app.services.optimization_service import benchmark_optimizer, run_optimizer
+from app.services.solvers import SolverConfig, available_solver_names
 from app.state.session_manager import SessionManager
 
 
@@ -38,26 +39,18 @@ PRESETS = {
     "Recommended (Balanced Mix)": {
         "weight": 1.5,
         "desc": "A smart blend of short breaks and longer vacations.",
-        "min_stretch": None,
-        "max_stretch": None,
     },
     "Long Weekends (3-4 days)": {
         "weight": 2.0,
         "desc": "Multiple 3–4 day weekends throughout the year.",
-        "min_stretch": 3,
-        "max_stretch": 4,
     },
     "Week-Long Breaks (entire week)": {
         "weight": 4.0,
         "desc": "Full week-long vacations (7–9 days).",
-        "min_stretch": 7,
-        "max_stretch": None,
     },
     "Extended Vacations (>2 weeks)": {
         "weight": 8.0,
         "desc": "Two weeks or more of continuous vacation.",
-        "min_stretch": 14,
-        "max_stretch": None,
     },
 }
 
@@ -210,15 +203,39 @@ def render_style_preset(user_input) -> None:
     st.caption(PRESETS[style]["desc"])
 
     user_input.adjacency_weight = PRESETS[style]["weight"]
-    user_input.min_stretch = PRESETS[style]["min_stretch"]
-    user_input.max_stretch = PRESETS[style]["max_stretch"]
 
     st.markdown("---")
 
 
+def render_solver_selection() -> Tuple[str, bool]:
+    """Step 5: Choose the optimization backend (and optional benchmark)."""
+    st.subheader("Step 5 — Select Solver")
+
+    available = available_solver_names()
+    if not available:
+        st.error("No optimization solver is available in this environment.")
+        return "", False
+
+    st.markdown(
+        "Pick the optimization engine. All available engines find the same "
+        "optimal number of break days — they can differ in speed and, when the "
+        "optimum is not unique, in *which* days they pick."
+    )
+
+    solver_name = st.selectbox("Solver backend", available, index=0)
+    compare = st.checkbox(
+        "Benchmark all available solvers",
+        value=False,
+        help="Solve with every available engine and compare time, objective, and the chosen schedule.",
+    )
+
+    st.markdown("---")
+    return solver_name, compare
+
+
 def render_prebooked_days(user_input, public_holidays: List[date]) -> None:
-    """Step 5: Allow user to add pre-booked days."""
-    st.subheader("Step 5 — Add Pre-booked Vacation Days (optional)")
+    """Step 6: Allow user to add pre-booked days."""
+    st.subheader("Step 6 — Add Pre-booked Vacation Days (optional)")
 
     st.markdown(
         "Specify individual dates or a date range for vacation days that have already been scheduled. "
@@ -329,8 +346,8 @@ def render_prebooked_days(user_input, public_holidays: List[date]) -> None:
 
 
 def render_other_time_off(user_input) -> None:
-    """Step 6: Add other non-PTO time off."""
-    st.subheader("Step 6 — Add other non-PTO Time Off")
+    """Step 7: Add other non-PTO time off."""
+    st.subheader("Step 7 — Add other non-PTO Time Off")
 
     st.markdown(
         "Add company-wide days off or missing public holidays so they won’t count against your PTO."
@@ -359,8 +376,10 @@ def render_other_time_off(user_input) -> None:
     st.markdown("---")
 
 
-def render_optimize_button(user_input, selected_ph_dates: List[date]) -> None:
-    """Step 7: Optimize button and processing."""
+def render_optimize_button(
+    user_input, selected_ph_dates: List[date], solver_name: str, compare: bool
+) -> None:
+    """Step 8: Optimize button and processing."""
     prebooked = user_input.prebooked_days
 
     # Get additional off days and combine with public holidays
@@ -384,24 +403,41 @@ def render_optimize_button(user_input, selected_ph_dates: List[date]) -> None:
         if remaining <= 0:
             st.error("At least 1 PTO day is required to optimize.")
             return
+        if not solver_name:
+            st.error("No solver available to optimize with.")
+            return
 
         # Pass the FULL PTO budget to optimizer, not just remaining
         # The optimizer will account for prebooked days internally
-        result = run_optimizer(
-            start=user_input.start,
-            end=user_input.end,
-            public_holidays=all_public_holidays,
-            leave_available=total_pto,  # Use full budget, not remaining
-            adjacency_weight=user_input.adjacency_weight,
-            prebooked_days=user_input.prebooked_days,
-            min_stretch=user_input.min_stretch,
-            max_stretch=user_input.max_stretch,
-        )
+        if compare:
+            bench = benchmark_optimizer(
+                start=user_input.start,
+                end=user_input.end,
+                public_holidays=all_public_holidays,
+                leave_available=total_pto,
+                adjacency_weight=user_input.adjacency_weight,
+                prebooked_days=user_input.prebooked_days,
+            )
+            show_benchmark(bench["rows"], bench["diverge"])
+            result = bench["primary"]
+            if result is None:
+                st.error("No solver found a feasible solution.")
+                return
+        else:
+            result = run_optimizer(
+                start=user_input.start,
+                end=user_input.end,
+                public_holidays=all_public_holidays,
+                leave_available=total_pto,  # Use full budget, not remaining
+                adjacency_weight=user_input.adjacency_weight,
+                prebooked_days=user_input.prebooked_days,
+                solver_name=solver_name,
+            )
 
         # Update result with the combined public holidays list for accurate display
         result["public_holidays"] = all_public_holidays
 
-        st.success("✅ Optimization Completed!")
+        st.success(f"✅ Optimization Completed! (solver: {result.get('solver', '—')})")
         show_results(result, prebook_pto_count)
 
 
@@ -428,9 +464,10 @@ def main() -> None:
 
     selected_ph_dates = render_public_holidays(user_input)
     render_style_preset(user_input)
+    solver_name, compare = render_solver_selection()
     render_prebooked_days(user_input, selected_ph_dates)
     render_other_time_off(user_input)
-    render_optimize_button(user_input, selected_ph_dates)
+    render_optimize_button(user_input, selected_ph_dates, solver_name, compare)
 
 
 if __name__ == "__main__":

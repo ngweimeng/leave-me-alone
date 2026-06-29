@@ -1,0 +1,153 @@
+"""
+Solver abstraction for the leave-optimization MILP.
+
+This is the seam that lets the same problem be solved by different backends
+(Xpress, Gurobi, OR-Tools, ...) and compared. The math lives in
+``LeaveProblem``; each backend translates it into its own modeling API.
+
+Class roles
+-----------
+- ``LeaveProblem``  : immutable description of the inputs (the "what").
+- ``SolverConfig``  : backend-agnostic tuning knobs (time limit, gap, ...).
+- ``LeaveSolution`` : the chosen break/leave days.
+- ``SolveStats``    : measured outcome (objective, time, status, counts).
+- ``SolveResult``   : solution + stats together.
+- ``LeaveSolver``   : abstract base; one concrete subclass per backend.
+"""
+
+from abc import ABC, abstractmethod
+from dataclasses import dataclass, field
+from datetime import date
+from typing import Optional
+
+
+@dataclass(frozen=True)
+class LeaveProblem:
+    """Immutable description of a leave-optimization problem.
+
+    Attributes:
+        date_range: Ordered list of every date in the planning horizon.
+        holidays: Dates that are public holidays (weekends are detected
+            automatically and need not be included here).
+        leave_available: Total PTO budget the solver may allocate.
+        adjacency_weight: Bonus per pair of consecutive break days. Higher
+            values bias the solution toward longer continuous breaks.
+        prebooked_days: Dates that must be taken as leave (forced to 1).
+    """
+
+    date_range: tuple[date, ...]
+    holidays: frozenset[date]
+    leave_available: int
+    adjacency_weight: float = 1.0
+    prebooked_days: frozenset[date] = frozenset()
+
+    def __post_init__(self) -> None:
+        if not self.date_range:
+            raise ValueError("date_range cannot be empty")
+        if self.leave_available < 0:
+            raise ValueError("leave_available cannot be negative")
+
+    @classmethod
+    def of(
+        cls,
+        date_range,
+        holidays,
+        leave_available: int,
+        adjacency_weight: float = 1.0,
+        prebooked_days=None,
+    ) -> "LeaveProblem":
+        """Build from loose iterables, coercing to the frozen types."""
+        return cls(
+            date_range=tuple(date_range),
+            holidays=frozenset(holidays or ()),
+            leave_available=leave_available,
+            adjacency_weight=adjacency_weight,
+            prebooked_days=frozenset(prebooked_days or ()),
+        )
+
+    def is_fixed_break(self, d: date) -> bool:
+        """True if a date is always a break day (weekend or public holiday)."""
+        return d.weekday() >= 5 or d in self.holidays
+
+    @property
+    def num_variables(self) -> int:
+        """Variable count for this horizon (leave + break + adjacency)."""
+        n = len(self.date_range)
+        return n + n + max(n - 1, 0)
+
+
+@dataclass(frozen=True)
+class SolverConfig:
+    """Backend-agnostic tuning knobs, mapped onto each engine's parameters.
+
+    Attributes:
+        time_limit_s: Wall-clock cap in seconds (None = no limit).
+        mip_gap: Relative MIP optimality gap to stop at (e.g. 0.0 = optimal).
+        threads: Solver threads (None = backend default).
+        verbose: Whether the backend prints its log.
+    """
+
+    time_limit_s: Optional[float] = None
+    mip_gap: float = 0.0
+    threads: Optional[int] = None
+    verbose: bool = False
+
+
+@dataclass
+class LeaveSolution:
+    """The chosen days. ``break_days`` ⊇ weekends/holidays + taken leave."""
+
+    break_days: list[date] = field(default_factory=list)
+    leave_days: list[date] = field(default_factory=list)
+
+    @property
+    def found(self) -> bool:
+        return bool(self.break_days)
+
+
+@dataclass
+class SolveStats:
+    """Measured outcome of a solve, for benchmarking and comparison."""
+
+    solver: str
+    status: str
+    objective: Optional[float]
+    solve_time_s: float
+    num_variables: int
+    num_constraints: int
+    num_break_days: int
+    num_leave_days: int
+
+
+@dataclass
+class SolveResult:
+    """A solution paired with its measured stats."""
+
+    solution: LeaveSolution
+    stats: SolveStats
+
+
+class LeaveSolver(ABC):
+    """Abstract leave-optimization backend.
+
+    Subclasses build the MILP in their native API and return a
+    :class:`SolveResult`. Use :attr:`name` for display and
+    :meth:`is_available` to gate backends whose package/license is missing.
+    """
+
+    #: Short, human-facing label (e.g. "Xpress", "Gurobi", "OR-Tools (CP-SAT)").
+    name: str = "abstract"
+
+    def __init__(self, config: Optional[SolverConfig] = None) -> None:
+        self.config = config or SolverConfig()
+
+    @classmethod
+    @abstractmethod
+    def is_available(cls) -> bool:
+        """True if this backend can run (package importable and licensed)."""
+        raise NotImplementedError
+
+    @abstractmethod
+    def solve(self, problem: LeaveProblem) -> SolveResult:
+        """Solve ``problem`` and return the solution plus measured stats."""
+        raise NotImplementedError

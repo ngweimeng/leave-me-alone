@@ -12,5 +12,3 @@ class LeaveOptimizationRequest:
     start: date
     end: date
     prebooked_days: List[date]
-    min_stretch: int | None = None
-    max_stretch: int | None = None

@@ -50,7 +50,7 @@ A Streamlit application that uses FICO Xpress optimization to help you get the m
 ### Code Quality Check (Format + Test)
 Run both code formatting and tests in one command:
 ```bash
-./check.sh
+./run_check.sh
 ```
 This will:
 - Format all code with `black` (auto-installs if needed)
@@ -106,26 +106,58 @@ leave-me-alone/
 ├── app/
 │   ├── main.py                    # Main Streamlit orchestrator
 │   ├── components/
-│   │   ├── inputs.py              # Input components and request builder
 │   │   ├── results_display.py    # Results visualization
 │   │   └── calendar_heatmap.py   # Calendar heatmap rendering
 │   ├── models/
-│   │   └── leave_request.py      # Pydantic data models
+│   │   └── leave_request.py      # Request data model
 │   ├── services/
-│   │   ├── optimization_service.py # Optimizer wrapper
-│   │   ├── leave_model.py         # MILP model implementation
-│   │   └── holiday_service.py     # Holiday data fetching
+│   │   ├── optimization_service.py # Optimizer + benchmark wrapper
+│   │   ├── leave_model.py         # Back-compat shim (solve_leave_lp)
+│   │   ├── holiday_service.py     # Holiday data fetching
+│   │   └── solvers/               # Pluggable solver backends
+│   │       ├── base.py            # LeaveProblem / SolverConfig / LeaveSolver (ABC)
+│   │       ├── xpress_solver.py   # FICO Xpress backend (LP branch-and-cut)
+│   │       ├── gurobi_solver.py   # Gurobi backend (free limited license)
+│   │       ├── scip_solver.py     # SCIP backend (open-source LP branch-and-cut)
+│   │       ├── ortools_solver.py  # OR-Tools CP-SAT backend (constraint programming)
+│   │       ├── registry.py        # Auto-detect available backends
+│   │       └── benchmark.py       # Compare backends on the same problem
 │   ├── state/
 │   │   └── session_manager.py     # Session state management
-│   └── tests.py/
+│   └── tests/
 │       ├── test_holiday_service.py
 │       ├── test_leave_model.py
 │       └── test_optimization_service.py
+├── pyproject.toml                 # Package metadata, deps, black & pytest config
 ├── requirements.txt               # Python dependencies
 ├── run_app.sh                     # Launch application
 ├── run_check.sh                   # Format code + run tests
 ├── LICENSE                        # Apache 2.0 license
 └── README.md                      # This file
+```
+
+## Solver Backends
+
+The optimization model can be solved by interchangeable backends, selectable in
+the UI (Step 5). They share a common `LeaveSolver` interface, so adding another
+engine is a single new class.
+
+| Backend | Paradigm | License | Notes |
+|---|---|---|---|
+| **FICO Xpress** | LP branch-and-cut | Commercial; free Community Edition | ~5000 variable/constraint cap |
+| **Gurobi** | LP branch-and-cut | Commercial; `pip install gurobipy` ships a free *limited* license | Capped at 2000 vars / 2000 constraints — a calendar year fits |
+| **SCIP** | LP branch-and-cut | Fully open source (Apache) | The strongest freely available MILP solver; no license, no size cap |
+| **OR-Tools (CP-SAT)** | Constraint programming / SAT | Fully open source (Apache) | No license, no size cap; a different algorithm from the LP solvers |
+
+Enable the **Benchmark all available solvers** option to solve the same problem
+with every installed engine and compare solve time, objective, and the chosen
+schedule. For a problem this small, all engines reach the **same optimal
+objective** — the benchmark's value is comparing speed and revealing when the
+optimum is *not unique* (different engines pick different, equally-optimal days).
+
+Only Xpress is required to run the app. The others are optional:
+```bash
+pip install gurobipy pyscipopt ortools   # adds Gurobi, SCIP, and OR-Tools CP-SAT
 ```
 
 ## Technical Appendix: LP Formulation

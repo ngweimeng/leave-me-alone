@@ -1,0 +1,12 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python -m pytest:*)",
+      "Bash(black:*)",
+      "Bash(pip install:*)",
+      "Bash(streamlit run:*)",
+      "Bash(./run_check.sh)",
+      "Bash(./run_app.sh)"
+    ]
+  }
+}

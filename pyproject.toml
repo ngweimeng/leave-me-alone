@@ -1,0 +1,36 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "leave-me-alone"
+version = "0.1.0"
+description = "PTO optimizer that maximizes continuous time off using linear programming."
+readme = "README.md"
+requires-python = ">=3.8"
+license = { text = "Apache-2.0" }
+dependencies = [
+    "streamlit",
+    "holidays",
+    "xpress",
+    "pydantic",
+    "python-dateutil",
+    "pandas",
+    "plotly",
+    "pycountry",
+]
+
+[project.optional-dependencies]
+dev = ["pytest", "black"]
+gurobi = ["gurobipy"]
+scip = ["pyscipopt"]
+ortools = ["ortools"]
+
+[tool.setuptools.packages.find]
+include = ["app*"]
+
+[tool.pytest.ini_options]
+testpaths = ["app/tests"]
+
+[tool.black]
+target-version = ["py38"]
