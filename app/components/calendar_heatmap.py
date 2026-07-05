@@ -5,31 +5,50 @@ import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 
 
-def render_calendar_heatmap(break_days, leave_days, year, holiday_map=None):
+def render_calendar_heatmap(
+    break_days,
+    leave_days,
+    year,
+    holiday_map=None,
+    highlight=None,
+    highlight_color="#66bb6a",
+    highlight_label="Off Together",
+    show_subheader=True,
+):
     """Render an interactive 12-month calendar grid for year using Plotly.
 
     Highlights:
     - Weekends: light gray background
     - Public holidays: yellow with holiday name in tooltip
     - Leave days: red with PTO Day label in tooltip
+    - ``highlight`` days (optional): a distinct color drawn on top of the above,
+      used by the household view to mark days everyone is off together.
 
     Args:
         break_days: Iterable of datetime.date objects (all break days)
         leave_days: Iterable of datetime.date objects (allocated leave)
         year: Year to display
         holiday_map: Optional dict {date: holiday_name} for tooltip labels
+        highlight: Optional iterable of dates to mark with ``highlight_color``,
+            overriding their other category. ``None`` (default) leaves the
+            original four-category rendering untouched.
+        highlight_color: Fill color for highlighted days.
+        highlight_label: Tooltip/legend label for highlighted days.
+        show_subheader: Whether to render the "Calendar View" subheader.
     """
 
     # Normalize inputs to sets of date objects
     bd_set = set([_as_date(d) for d in break_days]) if break_days else set()
     ld_set = set([_as_date(d) for d in leave_days]) if leave_days else set()
+    hl_set = set([_as_date(d) for d in highlight]) if highlight else set()
 
     # If there are no break days and no leave days, nothing to show
     if not bd_set and not ld_set:
         st.info("No breaks or leave days found to display.")
         return
 
-    st.subheader("📅 Calendar View")
+    if show_subheader:
+        st.subheader("📅 Calendar View")
 
     # Compute public holidays as break_days that are not weekends and not leave
     year_dates = set(
@@ -43,12 +62,14 @@ def render_calendar_heatmap(break_days, leave_days, year, holiday_map=None):
     if holiday_map is None:
         holiday_map = {}
 
-    # Color mapping: 0=white, 1=weekend, 2=holiday, 3=PTO
+    # Color mapping: 0=white, 1=weekend, 2=holiday, 3=PTO, 4=highlight.
+    # cmin/cmax below are set to the 0..4 range so each integer maps to a band.
     colorscale = [
-        [0, "white"],
-        [0.33, "#efefef"],  # weekend
-        [0.66, "#ffd54f"],  # holiday
-        [1, "#ff6b6b"],  # PTO
+        [0.0, "white"],
+        [0.25, "#efefef"],  # weekend
+        [0.50, "#ffd54f"],  # holiday
+        [0.75, "#ff6b6b"],  # PTO
+        [1.0, highlight_color],  # off together
     ]
 
     # Create subplots: 4 rows x 3 columns
@@ -84,8 +105,12 @@ def render_calendar_heatmap(break_days, leave_days, year, holiday_map=None):
 
                 d = _dt.date(year, month, day)
 
-                # Determine color value and label
-                if d in ld_set:
+                # Determine color value and label. Highlight wins over all
+                # other categories so "off together" days are unmistakable.
+                if d in hl_set:
+                    z_val = 4
+                    label = highlight_label
+                elif d in ld_set:
                     z_val = 3
                     label = "PTO Day"
                 elif d in ph_set:
@@ -115,7 +140,7 @@ def render_calendar_heatmap(break_days, leave_days, year, holiday_map=None):
                     color=z_vals,
                     colorscale=colorscale,
                     cmin=0,
-                    cmax=3,
+                    cmax=4,
                     line=dict(color="lightgray", width=1),
                     symbol="square",
                 ),
@@ -160,9 +185,13 @@ def render_calendar_heatmap(break_days, leave_days, year, holiday_map=None):
         ("#ffd54f", "Public Holidays"),
         ("#efefef", "Weekends"),
     ]
+    if hl_set:
+        legend_items.insert(0, (highlight_color, highlight_label))
 
+    # Space the swatches evenly regardless of how many there are.
+    step = 0.7 / max(len(legend_items), 1)
     for i, (color, label_text) in enumerate(legend_items):
-        x_pos = 0.25 + i * 0.25
+        x_pos = 0.2 + i * step
         fig.add_shape(
             type="rect",
             xref="paper",

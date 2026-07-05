@@ -4,6 +4,11 @@
 
 A Streamlit application that uses FICO Xpress optimization to help you get the most continuous time off by strategically placing your paid time off (PTO) days adjacent to weekends and public holidays.
 
+It has two modes: **Just me** — optimize a single person's PTO — and
+**Household (couple / family)** — coordinate several people so they maximize the
+days they are off *together*, while each person keeps their own budget, country
+holidays and pre-booked days private (see [Household coordination](#household-coordination-consensus-planning-protocol)).
+
 [![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
 [![Python](https://img.shields.io/badge/python-3.8+-blue.svg)](https://www.python.org/downloads/)
 [![Streamlit](https://img.shields.io/badge/streamlit-1.0+-red.svg)](https://streamlit.io)
@@ -69,7 +74,9 @@ black app
 
 ## Usage
 
-### Step-by-Step Guide
+At the top of the app, choose **Just me** or **Household (couple / family)**.
+
+### Just me — Step-by-Step Guide
 
 1. **Enter PTO Days**: Input how many paid time-off days you have available
 
@@ -80,12 +87,17 @@ black app
    - Review and edit the holiday list in an interactive table
    - Select/deselect specific holidays
 
-4. **Choose Vacation Style**: Pick a preset that matches your preference:
-   - **Recommended (Balanced Mix)** - Smart blend of short and long breaks
-   - **Long Weekends** - More 3-4 day weekends
-   - **Mini Breaks** - Several 5-6 day breaks
-   - **Week-long Breaks** - Focused 7-9 day vacations
-   - **Extended Vacations** - Longer 10-15 day getaways
+4. **Choose Vacation Style**: Pick a preset that caps how long any single
+   continuous break may run (`max_stretch`):
+   - **Long Weekends (3-4 days)** - breaks capped at 4 consecutive days
+   - **Mini Breaks (5-6 days)** - breaks capped at 6 consecutive days
+   - **Week-Long Breaks (7-9 days)** - breaks capped at 9 consecutive days
+   - **Extended Vacations (>2 weeks)** - no cap; longest possible blocks
+
+   > The style controls break **length** via a hard cap, not the
+   > `adjacency_weight`. A positive adjacency weight only decides *whether* to
+   > cluster at all — any positive value clusters maximally, so it cannot set a
+   > target length on its own. See the LP appendix.
 
 5. **Add Pre-booked Days** (optional): Specify days you've already committed to
 
@@ -99,19 +111,40 @@ black app
    - Calendar heatmap visualization
    - Detailed breakdown of leave days
 
+### Household — Step-by-Step Guide
+
+1. **Choose the shared timeframe**: everyone plans within the same date range.
+
+2. **Add the household**: a table where each person gets a name, country
+   (their own public-holiday calendar), PTO budget, and vacation style. Add or
+   remove people freely; optional per-person pre-booked days live behind a
+   per-row expander. Pick the solver backend used privately for each person.
+
+3. **Tune coordination** (optional): a *togetherness priority* slider trades off
+   how hard to push everyone's breaks into alignment.
+
+4. **Coordinate**: click **Coordinate Household Breaks** to see:
+   - **Days off together** vs. the *everyone-books-solo* baseline, and the
+     **extra days** coordination bought
+   - a calendar with the shared "off together" days highlighted green
+   - a per-person breakdown of PTO used and shared days
+
 ## Project Structure
 
 ```
 leave-me-alone/
 ├── app/
-│   ├── main.py                    # Main Streamlit orchestrator
+│   ├── main.py                    # Main Streamlit orchestrator (mode toggle)
 │   ├── components/
-│   │   ├── results_display.py    # Results visualization
-│   │   └── calendar_heatmap.py   # Calendar heatmap rendering
+│   │   ├── results_display.py    # Solo results visualization
+│   │   ├── calendar_heatmap.py   # Calendar heatmap (optional "off together" overlay)
+│   │   ├── household_input.py    # Household roster editor
+│   │   └── consensus_display.py  # Household coordination result view
 │   ├── models/
 │   │   └── leave_request.py      # Request data model
 │   ├── services/
 │   │   ├── optimization_service.py # Optimizer + benchmark wrapper
+│   │   ├── consensus_service.py   # Household coordination (CPP) coordinator
 │   │   ├── leave_model.py         # Back-compat shim (solve_leave_lp)
 │   │   ├── holiday_service.py     # Holiday data fetching
 │   │   └── solvers/               # Pluggable solver backends
@@ -122,12 +155,17 @@ leave-me-alone/
 │   │       ├── ortools_solver.py  # OR-Tools CP-SAT backend (constraint programming)
 │   │       ├── registry.py        # Auto-detect available backends
 │   │       └── benchmark.py       # Compare backends on the same problem
+│   ├── demos/
+│   │   └── consensus_demo.py      # Headless household-coordination demo
 │   ├── state/
 │   │   └── session_manager.py     # Session state management
 │   └── tests/
 │       ├── test_holiday_service.py
 │       ├── test_leave_model.py
-│       └── test_optimization_service.py
+│       ├── test_optimization_service.py
+│       ├── test_solvers.py
+│       ├── test_consensus_service.py
+│       └── test_household_input.py
 ├── pyproject.toml                 # Package metadata, deps, black & pytest config
 ├── requirements.txt               # Python dependencies
 ├── run_app.sh                     # Launch application
@@ -160,6 +198,39 @@ Only Xpress is required to run the app. The others are optional:
 pip install gurobipy pyscipopt ortools   # adds Gurobi, SCIP, and OR-Tools CP-SAT
 ```
 
+## Household coordination (Consensus Planning Protocol)
+
+Household mode coordinates several people's PTO so they maximize the days they
+are off **together**, using the **Consensus Planning Protocol (CPP)** — a
+distributed-optimization method (consensus ADMM / dual decomposition). Instead
+of pooling everyone's data into one model, CPP treats each person as an
+independent **agent**:
+
+- Each person's budget, country holidays, pre-booked days and vacation style
+  stay **private** to their own solver — the coordinator never sees them.
+- The only shared quantity is which calendar days the household is off together.
+- A central coordinator vends per-day "prices" and each person re-optimizes
+  privately; over a few rounds the prices pull everyone's breaks into alignment.
+  "Days off" is a common currency across people, which is exactly what CPP needs
+  to trade value between agents.
+
+Under the hood each person is solved by the **same single-person model** above
+(their existing backend), with one extra per-day price term in the objective —
+so nothing about the core optimization changes. Because the per-person problems
+are integer programs, the coordinator keeps the **best schedule it observes**,
+which is always at least as good as everyone planning independently.
+
+Try it headlessly (a US + UK couple with different budgets):
+
+```bash
+python -m app.demos.consensus_demo
+```
+
+> Coordination only helps when calendars actually differ — two identical people
+> over a full year already share every weekend and holiday, so the gain is zero.
+> Different countries, budgets, or pre-booked days are what create room to
+> coordinate.
+
 ## Technical Appendix: LP Formulation
 
 We optimize which days to take leave in order to maximize total break time
@@ -177,7 +248,10 @@ a leave budget and encouraging longer continuous breaks.
 #### Parameters
 
 - $L \in \mathbb{Z}_{\ge 0}$ : total number of leave days available  
-- $\alpha \in \mathbb{R}_{\ge 0}$ : adjacency weight (bonus for consecutive break days)
+- $\alpha \in \mathbb{R}_{\ge 0}$ : adjacency weight (bonus for consecutive break days)  
+- $K \in \mathbb{Z}_{\ge 1} \cup \{\infty\}$ : optional cap on the length of any
+  continuous break ($K = \infty$ means uncapped). This is what the UI's
+  vacation-style presets set.
 
 #### Decision Variables
 
@@ -246,6 +320,28 @@ a_d ≥ b_d + b_(d+) - 1
 ```
 
 These three constraints linearize the logical AND condition: `a_d = b_d AND b_(d+)`, ensuring `a_d = 1` if and only if both `b_d` and `b_(d+)` are 1.
+
+**5. Max-stretch cap (controls break length)**
+
+When `K < ∞`, no run of `K+1` consecutive break days is allowed. For every
+window `W` of `K+1` consecutive dates that contains at least one weekday
+(non-fixed-break) day:
+```
+Σ(b_d for d in W) ≤ K
+```
+Windows made up *entirely* of weekends/holidays are skipped: such a window is
+already all breaks by constraint (3) and capping it would be infeasible.
+Skipping them leaves a pre-existing forced holiday run (e.g. a long public-
+holiday bridge) untouched, while still preventing *leave* from creating or
+extending a run beyond `K`. This keeps the model feasible for any `K ≥ 1`.
+
+> **Why a cap and not just `α`?** Because every leave day adds exactly one break
+> day at no cost, the total number of break days is fixed by the budget. The
+> objective's first term is therefore constant at the optimum, and maximizing
+> the adjacency term reduces to *minimizing the number of break stretches* —
+> i.e. clustering maximally. So any `α > 0` produces the same maximally-clustered
+> schedule: `α` is a **threshold** (cluster vs. don't), not a length dial. To
+> target a specific break length you must constrain it, which is what `K` does.
 
 #### Variable Domains
 
