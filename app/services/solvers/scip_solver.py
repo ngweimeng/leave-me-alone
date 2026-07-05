@@ -66,8 +66,15 @@ class ScipSolver(LeaveSolver):
             model.addCons(adj[d1] <= brk[d2])
             model.addCons(adj[d1] >= brk[d1] + brk[d2] - 1)
 
+        # Max-stretch cap: no window of K+1 days may be all breaks.
+        for window in problem.stretch_windows():
+            model.addCons(quicksum(brk[dr[j]] for j in window) <= problem.max_stretch)
+
         objective = quicksum(brk[d] for d in dr)
         objective += problem.adjacency_weight * quicksum(adj[d] for d in adj)
+        if problem.has_prices:
+            # Consensus day-prices: reward/penalize being off on specific days.
+            objective += quicksum(problem.price_of(d) * brk[d] for d in dr)
         model.setObjective(objective, sense="maximize")
 
         # SCIP frees the original problem after solving, so capture the

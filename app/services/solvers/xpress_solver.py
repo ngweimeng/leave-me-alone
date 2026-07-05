@@ -53,8 +53,17 @@ class XpressSolver(LeaveSolver):
             model.addConstraint(adj[d1] <= brk[d2])
             model.addConstraint(adj[d1] >= brk[d1] + brk[d2] - 1)
 
+        # Max-stretch cap: no window of K+1 days may be all breaks.
+        for window in problem.stretch_windows():
+            model.addConstraint(
+                xp.Sum(brk[dr[j]] for j in window) <= problem.max_stretch
+            )
+
         objective = xp.Sum(brk[d] for d in dr)
         objective += problem.adjacency_weight * xp.Sum(adj[d] for d in adj)
+        if problem.has_prices:
+            # Consensus day-prices: reward/penalize being off on specific days.
+            objective += xp.Sum(problem.price_of(d) * brk[d] for d in dr)
         model.setObjective(objective, sense=xp.maximize)
 
         # Map uniform config onto Xpress controls.

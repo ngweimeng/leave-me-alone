@@ -78,8 +78,17 @@ class GurobiSolver(LeaveSolver):
             model.addConstr(adj[d1] <= brk[d2])
             model.addConstr(adj[d1] >= brk[d1] + brk[d2] - 1)
 
+        # Max-stretch cap: no window of K+1 days may be all breaks.
+        for window in problem.stretch_windows():
+            model.addConstr(
+                gp.quicksum(brk[dr[j]] for j in window) <= problem.max_stretch
+            )
+
         objective = gp.quicksum(brk[d] for d in dr)
         objective += problem.adjacency_weight * gp.quicksum(adj[d] for d in adj_idx)
+        if problem.has_prices:
+            # Consensus day-prices: reward/penalize being off on specific days.
+            objective += gp.quicksum(problem.price_of(d) * brk[d] for d in dr)
         model.setObjective(objective, GRB.MAXIMIZE)
 
         t0 = time.perf_counter()

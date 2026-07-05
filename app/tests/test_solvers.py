@@ -55,6 +55,47 @@ def test_prebooked_days_are_forced():
     assert forced in result.solution.leave_days
 
 
+def _longest_stretch(break_days):
+    if not break_days:
+        return 0
+    days = sorted(break_days)
+    longest = cur = 1
+    for prev, nxt in zip(days, days[1:]):
+        cur = cur + 1 if (nxt - prev).days == 1 else 1
+        longest = max(longest, cur)
+    return longest
+
+
+@pytest.mark.parametrize("name", available_solver_names())
+def test_max_stretch_caps_break_length(name):
+    # A horizon with no forced holiday run longer than the cap: every break
+    # stretch the solver builds must respect max_stretch.
+    start = date(2025, 1, 1)
+    dr = [start + timedelta(days=i) for i in range(120)]
+    problem = LeaveProblem.of(dr, [], leave_available=20, max_stretch=4)
+    result = get_solver(name, SolverConfig()).solve(problem)
+    assert result.solution.found
+    assert _longest_stretch(result.solution.break_days) <= 4
+
+
+def test_max_stretch_stays_feasible_with_long_holiday_run():
+    # A block of public holidays longer than the cap is a *forced* run; the
+    # cap must not make the model infeasible (windows that are all fixed breaks
+    # are skipped). The forced run may exceed the cap; leave must not extend it.
+    start = date(2025, 6, 2)  # a Monday
+    dr = [start + timedelta(days=i) for i in range(30)]
+    holiday_block = {start + timedelta(days=i) for i in range(5)}  # Mon–Fri
+    problem = LeaveProblem.of(dr, holiday_block, leave_available=5, max_stretch=3)
+    name = available_solver_names()[0]
+    result = get_solver(name).solve(problem)
+    assert result.solution.found  # feasible despite the 5+-day forced run
+
+
+def test_invalid_max_stretch_raises():
+    with pytest.raises(ValueError):
+        LeaveProblem.of([date(2025, 1, 1)], [], leave_available=5, max_stretch=0)
+
+
 def test_benchmark_all_solvers_agree_on_objective():
     rows = run_benchmark(_problem(), SolverConfig())
     objectives = [r.result.stats.objective for r in rows if r.result.solution.found]
