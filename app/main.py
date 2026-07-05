@@ -14,6 +14,9 @@ import streamlit as st
 
 from app.models.leave_request import LeaveOptimizationRequest
 from app.components.results_display import show_benchmark, show_results
+from app.components.consensus_display import show_consensus
+from app.components.household_input import render_household_input
+from app.services.consensus_service import coordinate
 from app.services.holiday_service import (
     get_public_holiday_map,
     get_supported_country_map,
@@ -35,22 +38,28 @@ def _format_range(start: date, end: date) -> str:
     return f"{start.strftime('%b %d, %Y')} → {end.strftime('%b %d, %Y')}"
 
 
+# Vacation style is controlled by ``max_stretch`` — a cap on how many
+# consecutive break days a single block may span. The adjacency weight only
+# decides *whether* to cluster (any positive value clusters maximally), so it
+# is held fixed; the cap is what makes the presets meaningfully different.
+_FIXED_ADJACENCY_WEIGHT = 1.0
+
 PRESETS = {
-    "Recommended (Balanced Mix)": {
-        "weight": 1.5,
-        "desc": "A smart blend of short breaks and longer vacations.",
-    },
     "Long Weekends (3-4 days)": {
-        "weight": 2.0,
-        "desc": "Multiple 3–4 day weekends throughout the year.",
+        "max_stretch": 4,
+        "desc": "Cap breaks at 4 consecutive days — many short long-weekends.",
     },
-    "Week-Long Breaks (entire week)": {
-        "weight": 4.0,
-        "desc": "Full week-long vacations (7–9 days).",
+    "Mini Breaks (5-6 days)": {
+        "max_stretch": 6,
+        "desc": "Cap breaks at 6 consecutive days — several mini-getaways.",
+    },
+    "Week-Long Breaks (7-9 days)": {
+        "max_stretch": 9,
+        "desc": "Cap breaks at 9 consecutive days — full week-long vacations.",
     },
     "Extended Vacations (>2 weeks)": {
-        "weight": 8.0,
-        "desc": "Two weeks or more of continuous vacation.",
+        "max_stretch": None,
+        "desc": "No cap — cluster into the longest continuous breaks possible.",
     },
 }
 
@@ -61,11 +70,12 @@ PRESETS = {
 def init() -> None:
     """Initialize page layout and header."""
     st.set_page_config(page_title="Leave Optimizer", page_icon="🌴", layout="wide")
-    # st.sidebar.title("Navigation")
-
     st.title("🌴 Leave Optimizer — Maximize Your Break")
-    st.subheader("Step 1 — Enter PTO Days")
 
+
+def render_solo_intro() -> None:
+    """Header for the solo optimization flow."""
+    st.subheader("Step 1 — Enter PTO Days")
     st.markdown(
         "Specify the total number of paid time-off days available. "
         "The optimizer will strategically allocate them within the selected timeframe."
@@ -91,10 +101,11 @@ def render_pto_input() -> int:
     return int(leave_available)
 
 
-def render_timeframe_selection() -> Tuple[date, date]:
+def render_timeframe_selection(show_header: bool = True) -> Tuple[date, date]:
     """Step 2: Select timeframe."""
-    st.subheader("Step 2 — Select Optimization Timeframe")
-    st.markdown("Define the period within which PTO days will be optimized.")
+    if show_header:
+        st.subheader("Step 2 — Select Optimization Timeframe")
+        st.markdown("Define the period within which PTO days will be optimized.")
 
     tf_option = st.radio(
         "Timeframe selection",
@@ -202,7 +213,8 @@ def render_style_preset(user_input) -> None:
     style = st.radio("Vacation Style", list(PRESETS.keys()), index=0)
     st.caption(PRESETS[style]["desc"])
 
-    user_input.adjacency_weight = PRESETS[style]["weight"]
+    user_input.adjacency_weight = _FIXED_ADJACENCY_WEIGHT
+    user_input.max_stretch = PRESETS[style]["max_stretch"]
 
     st.markdown("---")
 
@@ -417,6 +429,7 @@ def render_optimize_button(
                 leave_available=total_pto,
                 adjacency_weight=user_input.adjacency_weight,
                 prebooked_days=user_input.prebooked_days,
+                max_stretch=user_input.max_stretch,
             )
             show_benchmark(bench["rows"], bench["diverge"])
             result = bench["primary"]
@@ -431,6 +444,7 @@ def render_optimize_button(
                 leave_available=total_pto,  # Use full budget, not remaining
                 adjacency_weight=user_input.adjacency_weight,
                 prebooked_days=user_input.prebooked_days,
+                max_stretch=user_input.max_stretch,
                 solver_name=solver_name,
             )
 
@@ -446,8 +460,9 @@ def render_optimize_button(
 # -------------------------------------------------------------------
 
 
-def main() -> None:
-    init()
+def render_solo_flow() -> None:
+    """The original single-person optimization wizard."""
+    render_solo_intro()
 
     leave_available = render_pto_input()
     start, end = render_timeframe_selection()
@@ -468,6 +483,65 @@ def main() -> None:
     render_prebooked_days(user_input, selected_ph_dates)
     render_other_time_off(user_input)
     render_optimize_button(user_input, selected_ph_dates, solver_name, compare)
+
+
+def render_household_flow() -> None:
+    """Coordinate PTO across a couple/family via the Consensus Planning Protocol."""
+    st.subheader("Step 1 — Choose the shared timeframe")
+    st.markdown(
+        "Pick the period the household is planning within. Everyone shares this "
+        "calendar span; each person still keeps their own country, budget and style."
+    )
+    start, end = render_timeframe_selection(show_header=False)
+
+    st.subheader("Step 2 — Add the household")
+    available = available_solver_names()
+    if not available:
+        st.error("No optimization solver is available in this environment.")
+        return
+    solver_name = st.selectbox(
+        "Solver backend (used privately for each person)", available, index=0
+    )
+    members = render_household_input(start, end, solver_name)
+
+    st.subheader("Step 3 — Tune coordination (optional)")
+    bonus = st.slider(
+        "Togetherness priority",
+        min_value=1.5,
+        max_value=6.0,
+        value=2.0,
+        step=0.5,
+        help="How strongly to favor lining days up. Higher pushes the household "
+        "to spend PTO aligning breaks; it must exceed 1 to have any effect.",
+    )
+
+    st.markdown("---")
+    if st.button("Coordinate Household Breaks", type="primary"):
+        if len(members) < 2:
+            st.error("Add at least two people (with a name and country) to coordinate.")
+            return
+        with st.spinner(f"Coordinating {len(members)} schedules…"):
+            result = coordinate(members, togetherness_bonus=bonus)
+        st.success("✅ Coordination complete!")
+        show_consensus(result)
+
+
+def main() -> None:
+    init()
+
+    mode = st.radio(
+        "Who are you planning for?",
+        ["Just me", "Household (couple / family)"],
+        horizontal=True,
+        help="Household mode lines up everyone's time off using the Consensus "
+        "Planning Protocol — keeping each person's budget and holidays private.",
+    )
+    st.markdown("---")
+
+    if mode == "Just me":
+        render_solo_flow()
+    else:
+        render_household_flow()
 
 
 if __name__ == "__main__":
