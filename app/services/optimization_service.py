@@ -19,7 +19,13 @@ def _build_date_range(start, end):
 
 
 def _build_problem(
-    start, end, public_holidays, leave_available, adjacency_weight, prebooked_days
+    start,
+    end,
+    public_holidays,
+    leave_available,
+    adjacency_weight,
+    prebooked_days,
+    max_stretch=None,
 ):
     return LeaveProblem.of(
         date_range=_build_date_range(start, end),
@@ -27,6 +33,7 @@ def _build_problem(
         leave_available=leave_available,
         adjacency_weight=adjacency_weight,
         prebooked_days=prebooked_days or [],
+        max_stretch=max_stretch,
     )
 
 
@@ -38,6 +45,7 @@ def run_optimizer(
     leave_available=0,
     adjacency_weight: float = 1.0,
     prebooked_days=None,
+    max_stretch=None,
     solver_name: str = "Xpress",
     config: SolverConfig = None,
 ):
@@ -51,7 +59,13 @@ def run_optimizer(
         prebooked_days = []
 
     problem = _build_problem(
-        start, end, public_holidays, leave_available, adjacency_weight, prebooked_days
+        start,
+        end,
+        public_holidays,
+        leave_available,
+        adjacency_weight,
+        prebooked_days,
+        max_stretch,
     )
     result = get_solver(solver_name, config).solve(problem)
     solution = result.solution
@@ -77,6 +91,7 @@ def benchmark_optimizer(
     leave_available=0,
     adjacency_weight: float = 1.0,
     prebooked_days=None,
+    max_stretch=None,
     solver_names=None,
     config: SolverConfig = None,
 ):
@@ -86,7 +101,13 @@ def benchmark_optimizer(
     primary result dict (first successful backend) for the UI to render.
     """
     problem = _build_problem(
-        start, end, public_holidays, leave_available, adjacency_weight, prebooked_days
+        start,
+        end,
+        public_holidays,
+        leave_available,
+        adjacency_weight,
+        prebooked_days,
+        max_stretch,
     )
     rows = run_benchmark(problem, config=config, solver_names=solver_names)
 
