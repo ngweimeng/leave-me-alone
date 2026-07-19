@@ -25,7 +25,6 @@ from app.services.optimization_service import benchmark_optimizer, run_optimizer
 from app.services.solvers import SolverConfig, available_solver_names
 from app.state.session_manager import SessionManager
 
-
 # Global session manager
 ses = SessionManager()
 
@@ -157,7 +156,7 @@ def render_public_holidays(user_input) -> List[date]:
     ph_country = st.selectbox(
         "Country (for public holidays)",
         options=sorted(country_map.keys()),
-        format_func=lambda c: country_map.get(c, c),
+        format_func=lambda c: str(country_map.get(c, c)),
     )
     user_input.country = ph_country
 
@@ -194,7 +193,7 @@ def render_public_holidays(user_input) -> List[date]:
                 for _, row in edited.iterrows():
                     if bool(row["include"]):
                         selected_dates.append(
-                            datetime.fromisoformat(row["date"]).date()
+                            datetime.fromisoformat(str(row["date"])).date()
                         )
 
     st.markdown("---")

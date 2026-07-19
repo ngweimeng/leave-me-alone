@@ -1,5 +1,9 @@
 """Xpress backend for the leave-optimization MILP."""
 
+# pyright: reportMissingImports=false, reportPossiblyUnboundVariable=false, reportCallIssue=false, reportAttributeAccessIssue=false, reportOptionalMemberAccess=false, reportIndexIssue=false, reportArgumentType=false
+# ``xpress`` is an optional backend imported under try/except; names bound in the
+# try are only used after ``is_available()`` gates ``solve()`` at runtime.
+
 import time
 import warnings
 
@@ -54,10 +58,12 @@ class XpressSolver(LeaveSolver):
             model.addConstraint(adj[d1] >= brk[d1] + brk[d2] - 1)
 
         # Max-stretch cap: no window of K+1 days may be all breaks.
-        for window in problem.stretch_windows():
-            model.addConstraint(
-                xp.Sum(brk[dr[j]] for j in window) <= problem.max_stretch
-            )
+        # stretch_windows() is empty when max_stretch is None (guard is a no-op).
+        if problem.max_stretch is not None:
+            for window in problem.stretch_windows():
+                model.addConstraint(
+                    xp.Sum(brk[dr[j]] for j in window) <= problem.max_stretch
+                )
 
         objective = xp.Sum(brk[d] for d in dr)
         objective += problem.adjacency_weight * xp.Sum(adj[d] for d in adj)

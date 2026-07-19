@@ -98,7 +98,11 @@ def test_invalid_max_stretch_raises():
 
 def test_benchmark_all_solvers_agree_on_objective():
     rows = run_benchmark(_problem(), SolverConfig())
-    objectives = [r.result.stats.objective for r in rows if r.result.solution.found]
+    objectives = [
+        r.result.stats.objective
+        for r in rows
+        if r.result.solution.found and r.result.stats.objective is not None
+    ]
     # Every backend should reach the same optimum for a model this small.
     # Compare with a tolerance: solvers differ by floating-point rounding
     # (e.g. SCIP returns 29.0000000000000007 where others return 29.0).

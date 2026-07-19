@@ -47,7 +47,7 @@ def run_optimizer(
     prebooked_days=None,
     max_stretch=None,
     solver_name: str = "Xpress",
-    config: SolverConfig = None,
+    config: SolverConfig | None = None,
 ):
     """Adapter between UI and the optimization model.
 
@@ -93,7 +93,7 @@ def benchmark_optimizer(
     prebooked_days=None,
     max_stretch=None,
     solver_names=None,
-    config: SolverConfig = None,
+    config: SolverConfig | None = None,
 ):
     """Solve the same problem with multiple backends and compare.
 

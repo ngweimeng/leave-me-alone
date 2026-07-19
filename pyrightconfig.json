@@ -1,0 +1,7 @@
+{
+  "venvPath": ".",
+  "venv": ".venv",
+  "include": ["app"],
+  "exclude": [".venv", "paper", "**/__pycache__", "**/node_modules"],
+  "typeCheckingMode": "basic"
+}
